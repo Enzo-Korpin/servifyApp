@@ -1,12 +1,30 @@
-const express = require("express");
+import express from "express";
+import {
+  signupUser,
+  loginUser,
+  verifyEmail,
+  checkAuth,
+  switchRole,
+} from "../controller/userController.js";
+
+import { loginValidation } from "../middleware/loginValidation.js";
+
+import { protectRoute } from "../middleware/protecteRoute.js";
+import { signupValidation } from "../middleware/signupValidation.js";
+import { verifyEmailValidation } from "../middleware/verifyEmailValidation.js";
+import { arcjetProtection } from "../middleware/arcjetProtection.js";
+
 const router = express.Router();
-const { registerUser, loginUser, verifyEmail, checkAuth, switchRole  } = require("../controller/userController");
-const { verifyToken} = require("../middleware/verifyToken");
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.post("/verify-email", verifyEmail);
-router.get("/check-auth", verifyToken, checkAuth);
-router.post("/switch-role", verifyToken, switchRole);
-module.exports = router;
+router.post("/signup", arcjetProtection, signupValidation, signupUser);
+router.post("/login", arcjetProtection, loginValidation, loginUser);
+router.post(
+  "/verify-email",
+  arcjetProtection,
+  verifyEmailValidation,
+  verifyEmail
+);
+router.get("/check-auth", protectRoute, checkAuth);
+router.post("/switch-role", protectRoute, switchRole);
 
+export default router;

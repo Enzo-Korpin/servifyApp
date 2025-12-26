@@ -1,30 +1,34 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const messageSchema = new mongoose.Schema({
+const messageSchema = new mongoose.Schema(
+  {
     chatId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Chat",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chat",
+      required: true,
     },
     senderId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     type: {
-        type: String,
-        enum: ["text", "image"],
-        default: "text"
+      type: String,
+      enum: ["text", "image"],
+      default: "text",
     },
     imageURL: {
-        type: String,
-        default: null
+      type: String,
+      default: null,
     },
     voiceURl: {
-        type: String,
-        default: null
-    }
-}, { timestamps: true });
+      type: String,
+      default: null,
+    },
+  },
+  { timestamps: true }
+);
 
 const Message = mongoose.model("Message", messageSchema);
 module.exports = Message;
+export default Message;

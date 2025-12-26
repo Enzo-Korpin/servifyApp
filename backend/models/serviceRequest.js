@@ -1,38 +1,39 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-
-const serviceRequestSchema = new mongoose.Schema({
+const serviceRequestSchema = new mongoose.Schema(
+  {
     customerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     workerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
     title: {
-        type: String
+      type: String,
     },
     description: {
-        type: String
+      type: String,
     },
     status: {
-        type: String,
-        enum: ["pending", "in-progress", "completed", "cancelled"],
-        default: "pending"
+      type: String,
+      enum: ["pending", "in-progress", "completed", "cancelled"],
+      default: "pending",
     },
     jobLat: {
-        type: Number,
-        required: true
+      type: Number,
+      required: true,
     },
     jobLng: {
-        type: Number,
-        required: true
+      type: Number,
+      required: true,
     },
-}, { timestamps: true });
+  },
+  { timestamps: true }
+);
 
 const ServiceRequest = mongoose.model("ServiceRequest", serviceRequestSchema);
-module.exports = ServiceRequest;
-   
+export default ServiceRequest;

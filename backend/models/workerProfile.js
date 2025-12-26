@@ -1,28 +1,32 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const workerProfileSchema = new mongoose.Schema({
+const workerProfileSchema = new mongoose.Schema(
+  {
     _id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
     bio: {
-        type: String,
-        
+      type: String,
+      default: "",
     },
     yearsOfExperience: {
-        type: Number,
-        
+      type: Number,
+      require: true,
+      default: 0,
     },
     rate: {
-        type: Number,
-        required: true
+      type: Number,
+      default: 0,
     },
-    skills: [{
-        type: [String],
-        default: [],
-        required: true
-    }],
-}, { timestamps: true });
+    numberOfRatings: {
+      type: Number,
+      default: 0,
+    },
+    skills: { type: [String], default: [], required: true },
+  },
+  { timestamps: true }
+);
 
 const WorkerProfile = mongoose.model("WorkerProfile", workerProfileSchema);
-module.exports = WorkerProfile;
+export default WorkerProfile;
