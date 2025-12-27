@@ -20,6 +20,7 @@ const chatSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+chatSchema.index({ customerId: 1, workerId: 1 }, { unique: true });
 
 const Chat = mongoose.model("Chat", chatSchema);
 export default Chat;

@@ -5,8 +5,9 @@ import User from "../models/user.js";
 import WorkerProfile from "../models/workerProfile.js";
 import { generateVerificationCode } from "../utils/generateVerficationCode.js";
 import { generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.js";
-import { sendVereficationEmail, sendWelcomeEmail } from "../mailtrap/emails.js";
+import { sendVerificationEmail, sendWelcomeEmail } from "../mailtrap/emails.js";
 
+// Fix It later
 const hashCode = (code) =>
   crypto.createHash("sha256").update(String(code)).digest("hex");
 
@@ -35,7 +36,8 @@ export const signupUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = generateVerificationCode();
-    const verificationCodeHash = hashCode(verificationCode);
+    // Fix It later
+    const verificationCodeHash = hashCode(verificationCode); 
     const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
     let createdUser;
@@ -53,6 +55,7 @@ export const signupUser = async (req, res) => {
             role,
             currentRole: role,
             isVerified: false,
+            // Fix It later
             verificationCodeHash,
             verificationCodeExpiry,
           },
@@ -79,7 +82,7 @@ export const signupUser = async (req, res) => {
       }
     });
 
-    // generateTokenAndSetCookie(res, createdUser._id);
+    generateTokenAndSetCookie(res, createdUser._id);
     sendVereficationEmail(createdUser.email, verificationCode).catch(
       console.error
     );
@@ -150,7 +153,7 @@ export const verifyEmail = async (req, res) => {
         .json({ message: "Invalid or expired verification code" });
     }
     user.isVerified = true;
-    user.verificationCodeHash = undefined;
+    safeUser.verificationCodeHash = undefined;
     user.verificationCodeExpiry = undefined;
 
     await user.save();

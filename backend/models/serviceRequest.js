@@ -6,34 +6,88 @@ const serviceRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
+
     workerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
-    title: {
+
+    // What service type (plumber/electrician…)
+    requestedSkill: {
       type: String,
+      trim: true,
+      required: true,
+      index: true
     },
-    description: {
+
+    message: {
       type: String,
+      trim: true,
+      maxlength: 1000,
+      default: "",
     },
+
+    addressText: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+        required: true,
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+        validate: {
+          validator: (v) => Array.isArray(v) && v.length === 2,
+          message: "coordinates must be [lng, lat]",
+        },
+      },
+    },
+
     status: {
       type: String,
-      enum: ["pending", "in-progress", "completed", "cancelled"],
+      enum: ["pending", "accepted", "rejected", "cancelled", "expired"],
       default: "pending",
+      index: true,
     },
-    jobLat: {
-      type: Number,
+
+    expiresAt: {
+      type: Date,
       required: true,
+      index: true,
     },
-    jobLng: {
-      type: Number,
-      required: true,
+
+    acceptedAt: { type: Date, default: null },
+    rejectedAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+
+    chatId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chat",
+      default: null,
+      index: true,
     },
+
+    rejectReason: { type: String, trim: true, default: null },
+    cancelReason: { type: String, trim: true, default: null },
   },
   { timestamps: true }
 );
 
-const ServiceRequest = mongoose.model("ServiceRequest", serviceRequestSchema);
-export default ServiceRequest;
+serviceRequestSchema.index({ location: "2dsphere" });
+
+serviceRequestSchema.index({ workerId: 1, status: 1 });
+serviceRequestSchema.index({ customerId: 1, status: 1 });
+
+serviceRequestSchema.index({ status: 1, expiresAt: 1 });
+export default mongoose.model("ServiceRequest", serviceRequestSchema);
