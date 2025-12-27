@@ -38,6 +38,24 @@ export const signupUser = async (req, res) => {
     const verificationCodeHash = hashCode(verificationCode);
     const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
+    let imageUrl;
+    if (image) {
+      const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
+      const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3);
+
+      if (image.length > MAX_BASE64_LENGTH) {
+        return res.status(413).json({ message: "Image too large" });
+      }
+
+      const uploadResponse = await cloudinary.uploader.upload(image, {
+        folder: "avatar",
+        resource_type: "image",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      });
+
+      imageUrl = uploadResponse.secure_url;
+    }
+
     let createdUser;
 
     await session.withTransaction(async () => {
@@ -49,7 +67,7 @@ export const signupUser = async (req, res) => {
             password: hashedPassword,
             lat,
             lng,
-            image,
+            image: imageUrl ?? null,
             role,
             currentRole: role,
             isVerified: false,
@@ -67,11 +85,11 @@ export const signupUser = async (req, res) => {
           [
             {
               _id: createdUser._id,
-              bio: bio || "",
+              bio: bio ?? "",
               yearsOfExperience: yearsOfExperience || 0,
               rate: 0,
               numberOfRatings: 0,
-              skills: skills || [],
+              skills: skills ?? [],
             },
           ],
           { session }
@@ -80,9 +98,9 @@ export const signupUser = async (req, res) => {
     });
 
     // generateTokenAndSetCookie(res, createdUser._id);
-    sendVereficationEmail(createdUser.email, verificationCode).catch(
-      console.error
-    );
+    // sendVereficationEmail(createdUser.email, verificationCode).catch(
+    //   console.error
+    // );
 
     const safeUser = createdUser.toObject();
     safeUser.password = undefined;

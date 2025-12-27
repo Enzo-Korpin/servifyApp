@@ -12,16 +12,16 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      enum: ["text", "image"],
-      default: "text",
+    receiverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
-    imageURL: {
+    text: {
       type: String,
       default: null,
     },
-    voiceURl: {
+    imageURL: {
       type: String,
       default: null,
     },
@@ -29,6 +29,8 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1, _id: -1 });
+messageSchema.index({ receiverId: 1, senderId: 1, createdAt: -1, _id: -1 });
+
 const Message = mongoose.model("Message", messageSchema);
-module.exports = Message;
 export default Message;
