@@ -1,5 +1,5 @@
 import User from "../models/user.js";
-import Chat from "../models/chat.js";
+import Chat from "../models/Chat.js";
 import Message from "../models/message.js";
 import cloudinary from "../lib/cloudinary.js";
 import mongoose from "mongoose";
