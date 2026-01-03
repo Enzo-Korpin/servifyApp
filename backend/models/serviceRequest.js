@@ -56,20 +56,23 @@ const serviceRequestSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "accepted", "rejected", "cancelled", "expired"],
+      enum: ["pending", "accepted", "completed", "rejected", "cancelled", "expired"],
       default: "pending",
       index: true,
     },
 
-    expiresAt: {
-      type: Date,
-      required: true,
-      index: true,
+    
+
+    hasFeedback: { 
+      type: Boolean, 
+      default: false 
     },
 
+    ratedAt: { type: Date, default: null },
     acceptedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
 
     chatId: {
       type: mongoose.Schema.Types.ObjectId,

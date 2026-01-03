@@ -12,17 +12,22 @@ const workerProfileSchema = new mongoose.Schema(
     },
     yearsOfExperience: {
       type: Number,
-      require: true,
+      required: true,
       default: 0,
     },
-    rate: {
+    ratingSumX2: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    ratingCount: {
       type: Number,
       default: 0,
     },
-    numberOfRatings: {
+    ratingAvg: {
       type: Number,
       default: 0,
-    },
+    }, //ratingAvg = (ratingSumX2 / ratingCount) / 2
     skills: {
       type: [String],
       required: true,

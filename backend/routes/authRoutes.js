@@ -4,9 +4,8 @@ import {
   loginUser,
   verifyEmail,
   checkAuth,
-  switchRole,
-} from "../controller/userController.js";
-
+} from "../controller/AuthController.js";
+import { switchRole } from "../controller/workerController.js";
 import { loginValidation } from "../middleware/loginValidation.js";
 
 import { protectRoute } from "../middleware/protecteRoute.js";

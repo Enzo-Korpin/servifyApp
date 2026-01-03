@@ -1,22 +1,12 @@
 import ServiceRequest from "../models/serviceRequest.js";
-import User from "../models/user.js";
-import WorkerProfile from "../models/workerProfile.js";
 import Chat from "../models/Chat.js";
 import mongoose from "mongoose";
 
-const expirePendingRequests = async () => {
-  await ServiceRequest.updateMany(
-    { status: "pending", expiresAt: { $lte: new Date() } },
-    { $set: { status: "expired" } }
-  );
-};
 
 const getServiceRequestsByRole = (requiredRole, fieldName) => {
   return async (req, res) => {
     try {
       const userId = req.user._id;
-
-      await expirePendingRequests();
 
       if (req.user.currentRole !== requiredRole) {
         return res.status(403).json({ message: `Must be ${requiredRole}` });
@@ -42,8 +32,7 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
 export const createServiceRequest = async (req, res) => {
   try {
     const customerId = req.user._id;
-    const { workerId, requestedSkill, message, addressText, location } =
-      req.body;
+    const { workerId, message, addressText, location } = req.body;
 
     if (req.user.currentRole !== "customer") {
       return res
@@ -51,10 +40,10 @@ export const createServiceRequest = async (req, res) => {
         .json({ message: "Only customers can create service requests" });
     }
 
-    if (!workerId || !requestedSkill) {
+    if (!workerId) {
       return res
         .status(400)
-        .json({ message: "workerId and requestedSkill are required" });
+        .json({ message: "workerId are required" });
     }
     if (!location || location.lng == null || location.lat == null) {
       return res
@@ -62,21 +51,7 @@ export const createServiceRequest = async (req, res) => {
         .json({ message: "location.lng and location.lat are required" });
     }
 
-    const skill = requestedSkill.toLowerCase().trim();
-    const worker = await WorkerProfile.findById(workerId).select("skills");
-    if (!worker) return res.status(404).json({ message: "Worker not found" });
-
-    const workerSkills = (worker.skills || []).map((s) =>
-      String(s).toLowerCase().trim()
-    );
-    const requested = String(skill).toLowerCase().trim();
-
-    if (!workerSkills.includes(requested)) {
-      return res
-        .status(400)
-        .json({ message: "Worker does not have the requested skill" });
-    }
-
+    
     const existingRequest = await ServiceRequest.findOne({
       customerId,
       workerId,
@@ -90,7 +65,6 @@ export const createServiceRequest = async (req, res) => {
       });
     }
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const newRequest = await ServiceRequest.create({
       customerId,
       workerId,
@@ -102,7 +76,6 @@ export const createServiceRequest = async (req, res) => {
         coordinates: [Number(location.lng), Number(location.lat)], // [lng, lat]
       },
       status: "pending",
-      expiresAt,
       chatId: null,
     });
 
@@ -188,11 +161,6 @@ export const acceptServiceRequest = async (req, res) => {
         });
     }
 
-    if (request.expiresAt && request.expiresAt <= new Date()) {
-      request.status = "expired";
-      await request.save();
-      return res.status(400).json({ message: "Request expired" });
-    }
     let chat = await Chat.findOne({
       customerId: request.customerId,
       workerId: request.workerId,

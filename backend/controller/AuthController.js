@@ -21,11 +21,11 @@ export const signupUser = async (req, res) => {
       password,
       lat,
       lng,
-      image,
+      image="",
       role,
-      bio,
-      yearsOfExperience,
-      skills,
+      bio="",
+      yearsOfExperience=0,
+      skills=[],
     } = req.body;
 
     const exists = await User.exists({ email });
@@ -198,46 +198,3 @@ export const checkAuth = (req, res) => {
   }
 };
 
-export const switchRole = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { targetRole } = req.body;
-
-    if (!["customer", "worker"].includes(targetRole)) {
-      return res.status(400).json({ message: "Invalid target role" });
-    }
-
-    if (req.user.role === "customer" && targetRole === "worker") {
-      return res.status(403).json({
-        message: "Customers are not allowed to switch to worker",
-      });
-    }
-
-    if (targetRole === "worker") {
-      const hasProfile = await WorkerProfile.exists({ _id: userId });
-      if (!hasProfile) {
-        return res
-          .status(409)
-          .json({ message: "Worker profile does not exist" });
-      }
-    }
-
-    if (req.user.currentRole === targetRole) {
-      return res.status(200).json({
-        message: "Already in this role",
-        currentRole: req.user.currentRole,
-      });
-    }
-
-    req.user.currentRole = targetRole;
-    await req.user.save();
-
-    return res.status(200).json({
-      message: "Role switched successfully",
-      currentRole: req.user.currentRole,
-    });
-  } catch (error) {
-    console.error("switchRole error:", error);
-    return res.status(500).json({ message: "Failed to switch role" });
-  }
-};

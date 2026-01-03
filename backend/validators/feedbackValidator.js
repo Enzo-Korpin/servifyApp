@@ -1,0 +1,27 @@
+import Joi from "joi";
+
+export const submitFeedbackValidator = (data) => {
+  const schema = Joi.object({
+    rating: Joi.number()
+      .min(1)
+      .max(5)
+      .required()
+      .custom((value, helpers) => {
+        if (!Number.isInteger(value * 2)) return helpers.error("any.invalid");
+        return value;
+      })
+      .messages({ "number.base": "Rating must be a number", 
+        "number.min": "Rating must be between 1 and 5", 
+        "number.max": "Rating must be between 1 and 5", 
+        "any.invalid": "Rating must be in 0.5 steps (1, 1.5, 2, 2.5, ... 5)", 
+        "any.required": "Rating is required", }),
+
+    comment: Joi.string().trim().max(1000).allow("").default(""),
+  });
+
+  return schema.validate(data, {
+    abortEarly: false,   
+    stripUnknown: true,  
+    convert: true,       
+  });
+};
