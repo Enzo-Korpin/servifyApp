@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
+import followRoutes from "./routes/followRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
 import { connectDB } from "./db/connectDB.js";
 
 const app = express();
@@ -16,6 +18,8 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/request", requestRoutes);
+app.use("/api", followRoutes);
+app.use("/api/customer", customerRoutes);
 
 const PORT = process.env.PORT;
 

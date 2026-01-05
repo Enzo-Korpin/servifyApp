@@ -5,7 +5,7 @@ import {
   verifyEmail,
   checkAuth,
   switchRole,
-} from "../controller/userController.js";
+} from "../controller/authController.js";
 
 import { loginValidation } from "../middleware/loginValidation.js";
 

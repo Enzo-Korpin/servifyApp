@@ -45,13 +45,13 @@ export const signupValidator = (data, options) => {
         "any.required": "password is required",
       }),
 
-    lat: Joi.number().min(-90).max(90).optional().messages({
+    lat: Joi.number().min(-90).max(90).required().messages({
       "number.base": "lat must be a number",
       "number.min": "lat must be >= -90",
       "number.max": "lat must be <= 90",
     }),
 
-    lng: Joi.number().min(-180).max(180).optional().messages({
+    lng: Joi.number().min(-180).max(180).required().messages({
       "number.base": "lng must be a number",
       "number.min": "lng must be >= -180",
       "number.max": "lng must be <= 180",

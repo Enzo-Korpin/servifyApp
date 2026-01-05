@@ -67,8 +67,10 @@ export const signupUser = async (req, res) => {
             fullName,
             email,
             password: hashedPassword,
-            lat,
-            lng,
+            location: {
+              type: "Point",
+              coordinates: [lng, lat],
+            },
             image: imageUrl ?? null,
             role,
             currentRole: role,
