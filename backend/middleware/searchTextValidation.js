@@ -1,7 +1,7 @@
-import { loginValidator } from "../validators/loginValidator.js";
+import { searchTextValidator } from "../validators/searchTextValidator.js";
 
-export const loginValidation = (req, res, next) => {
-  const { error, value } = loginValidator(req.body ?? {}, {
+export const searchTextValidation = (req, res, next) => {
+  const { error, value } = searchTextValidator(req.query ?? {}, {
     abortEarly: false,
     stripUnknown: true,
     convert: true,
@@ -12,6 +12,6 @@ export const loginValidation = (req, res, next) => {
         detail.message.replace(/['"]/g, "")
       ),
     });
-  req.body = value;
+  req.validateQuery = value;
   next();
 };

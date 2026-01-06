@@ -8,9 +8,10 @@ export const sendMessageValidation = (req, res, next) => {
     return res.status(400).json({ message: "Invalid receiver id" });
   }
 
-  const { error } = sendMessageValidator(req.body ?? {}, {
+  const { error, value } = sendMessageValidator(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,
+    convert: true,
   });
 
   if (error) {
@@ -18,6 +19,6 @@ export const sendMessageValidation = (req, res, next) => {
       message: error.details.map((d) => d.message.replace(/['"]/g, "")),
     });
   }
-
+  req.body = value;
   next();
 };

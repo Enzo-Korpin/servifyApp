@@ -21,7 +21,7 @@ const serviceRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: true,
-      index: true
+      index: true,
     },
 
     message: {
@@ -56,16 +56,14 @@ const serviceRequestSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "accepted", "completed", "rejected", "cancelled", "expired"],
+      enum: ["pending", "accepted", "completed", "rejected", "cancelled"],
       default: "pending",
       index: true,
     },
 
-    
-
-    hasFeedback: { 
-      type: Boolean, 
-      default: false 
+    hasFeedback: {
+      type: Boolean,
+      default: false,
     },
 
     ratedAt: { type: Date, default: null },

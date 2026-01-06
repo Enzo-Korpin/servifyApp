@@ -7,7 +7,7 @@ const followSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    WorkerId: {
+    workerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
@@ -15,5 +15,8 @@ const followSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+followSchema.index({ customerId: 1, workerId: 1, createdAt: -1, _id: -1 });
+
 const Follow = mongoose.model("Follow", followSchema);
 export default Follow;

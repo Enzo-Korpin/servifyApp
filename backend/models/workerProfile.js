@@ -17,7 +17,6 @@ const workerProfileSchema = new mongoose.Schema(
     },
     ratingSumX2: {
       type: Number,
-      required: true,
       default: 0,
     },
     ratingCount: {
@@ -31,11 +30,11 @@ const workerProfileSchema = new mongoose.Schema(
     skills: {
       type: [String],
       required: true,
-      set: (skills) => skills.map(s => s.toLowerCase().trim()),
+      set: (skills) => skills.map((s) => s.toLowerCase().trim()),
       validate: {
         validator: (v) => Array.isArray(v) && v.length > 0,
-        message: "Worker must have at least one skill"
-      }
+        message: "Worker must have at least one skill",
+      },
     },
   },
   { timestamps: true }

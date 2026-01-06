@@ -1,9 +1,10 @@
 import { signupValidator } from "../validators/signupValidator.js";
 
 export const signupValidation = (req, res, next) => {
-  const { error } = signupValidator(req.body ?? {}, {
+  const { error, value } = signupValidator(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,
+    convert: true,
   });
   if (error)
     return res.status(400).json({
@@ -11,5 +12,6 @@ export const signupValidation = (req, res, next) => {
         detail.message.replace(/['"]/g, "")
       ),
     });
+  req.body = value;
   next();
 };

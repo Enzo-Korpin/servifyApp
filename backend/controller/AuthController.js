@@ -21,11 +21,11 @@ export const signupUser = async (req, res) => {
       password,
       lat,
       lng,
-      image="",
+      image = "",
       role,
-      bio="",
-      yearsOfExperience=0,
-      skills=[],
+      bio = "",
+      yearsOfExperience = 0,
+      skills = [],
     } = req.body;
 
     const exists = await User.exists({ email });
@@ -67,8 +67,10 @@ export const signupUser = async (req, res) => {
             fullName,
             email,
             password: hashedPassword,
-            lat,
-            lng,
+            location: {
+              type: "Point",
+              coordinates: [lng, lat],
+            },
             image: imageUrl ?? null,
             role,
             currentRole: role,
@@ -90,8 +92,8 @@ export const signupUser = async (req, res) => {
               _id: createdUser._id,
               bio: bio ?? "",
               yearsOfExperience: yearsOfExperience || 0,
-              rate: 0,
-              numberOfRatings: 0,
+              ratingAvg: 0,
+              ratingCount: 0,
               skills: skills ?? [],
             },
           ],
@@ -197,4 +199,3 @@ export const checkAuth = (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-

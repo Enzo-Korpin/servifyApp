@@ -2,7 +2,6 @@ import ServiceRequest from "../models/serviceRequest.js";
 import Chat from "../models/Chat.js";
 import mongoose from "mongoose";
 
-
 const getServiceRequestsByRole = (requiredRole, fieldName) => {
   return async (req, res) => {
     try {
@@ -41,9 +40,7 @@ export const createServiceRequest = async (req, res) => {
     }
 
     if (!workerId) {
-      return res
-        .status(400)
-        .json({ message: "workerId are required" });
+      return res.status(400).json({ message: "workerId are required" });
     }
     if (!location || location.lng == null || location.lat == null) {
       return res
@@ -51,7 +48,6 @@ export const createServiceRequest = async (req, res) => {
         .json({ message: "location.lng and location.lat are required" });
     }
 
-    
     const existingRequest = await ServiceRequest.findOne({
       customerId,
       workerId,
@@ -154,11 +150,9 @@ export const acceptServiceRequest = async (req, res) => {
     }
 
     if (request.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          message: `Cannot accept request with status '${request.status}'`,
-        });
+      return res.status(400).json({
+        message: `Cannot accept request with status '${request.status}'`,
+      });
     }
 
     let chat = await Chat.findOne({
@@ -216,17 +210,9 @@ export const rejectServiceRequest = async (req, res) => {
     }
 
     if (request.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          message: `Cannot reject request with status '${request.status}'`,
-        });
-    }
-
-    if (request.expiresAt && request.expiresAt <= new Date()) {
-      request.status = "expired";
-      await request.save();
-      return res.status(400).json({ message: "Request expired" });
+      return res.status(400).json({
+        message: `Cannot reject request with status '${request.status}'`,
+      });
     }
 
     request.status = "rejected";

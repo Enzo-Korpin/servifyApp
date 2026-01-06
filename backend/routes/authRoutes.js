@@ -4,8 +4,8 @@ import {
   loginUser,
   verifyEmail,
   checkAuth,
-} from "../controller/AuthController.js";
-import { switchRole } from "../controller/workerController.js";
+} from "../controller/authController.js";
+
 import { loginValidation } from "../middleware/loginValidation.js";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
@@ -24,6 +24,5 @@ router.post(
   verifyEmail
 );
 router.get("/check-auth", protectRoute, checkAuth);
-router.post("/switch-role", protectRoute, switchRole);
 
 export default router;

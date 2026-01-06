@@ -71,7 +71,7 @@ export const getWorkerStatus = async (req, res) => {
       stats[row._id] = row.count;
     });
     return res.status(200).json({ stats });
-    } catch (error) {
+  } catch (error) {
     console.error("getWorkerStatus error:", error);
     return res.status(500).json({ message: "Failed to get worker status" });
   }
