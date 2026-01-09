@@ -17,12 +17,12 @@ const serviceRequestSchema = new mongoose.Schema(
     },
 
     // What service type (plumber/electrician…)
-    requestedSkill: {
-      type: String,
-      trim: true,
-      required: true,
-      index: true,
-    },
+    // requestedSkill: {
+    //   type: String,
+    //   trim: true,
+    //   required: true,
+    //   index: true,
+    // },
 
     message: {
       type: String,

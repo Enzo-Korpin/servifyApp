@@ -18,11 +18,11 @@ const router = express.Router();
 router.post("/signup", arcjetProtection, signupValidation, signupUser);
 router.post("/login", arcjetProtection, loginValidation, loginUser);
 router.post(
-  "/verify-email",
+  "/verifyEmail",
   arcjetProtection,
   verifyEmailValidation,
   verifyEmail
 );
-router.get("/check-auth", protectRoute, checkAuth);
+router.get("/checkAuth", protectRoute, checkAuth);
 
 export default router;

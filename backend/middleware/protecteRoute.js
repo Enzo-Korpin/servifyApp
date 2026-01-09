@@ -3,7 +3,17 @@ import User from "../models/user.js";
 
 export const protectRoute = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    // 1) cookie token (web)
+    let token = req.cookies?.token;
+
+    // 2) bearer token (mobile / Postman / tests)
+    if (!token) {
+      const auth = req.headers.authorization;
+
+      if (auth?.startsWith("Bearer ")) {
+        token = auth.split(" ")[1];
+      }
+    }
 
     if (!token) {
       return res

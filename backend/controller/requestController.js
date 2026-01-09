@@ -64,7 +64,7 @@ export const createServiceRequest = async (req, res) => {
     const newRequest = await ServiceRequest.create({
       customerId,
       workerId,
-      requestedSkill: skill,
+      // requestedSkill: skill,
       message: (message || "").trim(),
       addressText: (addressText || "").trim(),
       location: {
@@ -226,5 +226,48 @@ export const rejectServiceRequest = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Server error", error: err.message });
+  }
+};
+
+export const completeServiceRequest = async (req, res) => {
+  try {
+    if (req.user.currentRole !== "worker") {
+      return res.status(403).json({ message: "Must be worker" });
+    }
+
+    const requestId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ message: "Invalid request id" });
+    }
+
+    const request = await ServiceRequest.findById(requestId);
+
+    if (!request) {
+      return res.status(404).json({ message: "Service request not found" });
+    }
+
+    if (request.workerId.toString() !== req.user._id.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to complete this request" });
+    }
+
+    if (request.status !== "accepted") {
+      return res.status(400).json({
+        message: `Cannot complete request with status "${request.status}"`,
+      });
+    }
+
+    request.status = "completed";
+    request.completedAt = new Date();
+
+    await request.save();
+
+    return res
+      .status(200)
+      .json({ message: "Service request completed", data: request });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 };

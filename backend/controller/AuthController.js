@@ -101,6 +101,7 @@ export const signupUser = async (req, res) => {
         );
       }
     });
+    const token = generateTokenAndSetCookie(res, createdUser._id);
 
     sendVerificationEmail(createdUser.email, verificationCode).catch(
       console.error
@@ -114,6 +115,7 @@ export const signupUser = async (req, res) => {
     return res.status(201).json({
       message: "User created successfully",
       user: safeUser,
+      token,
     });
   } catch (error) {
     console.error("Error in registerUser:", error);
@@ -172,7 +174,7 @@ export const verifyEmail = async (req, res) => {
         .json({ message: "Invalid or expired verification code" });
     }
     user.isVerified = true;
-    safeUser.verificationCodeHash = undefined;
+    user.verificationCodeHash = undefined;
     user.verificationCodeExpiry = undefined;
 
     await user.save();
