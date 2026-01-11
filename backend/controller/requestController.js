@@ -64,7 +64,6 @@ export const createServiceRequest = async (req, res) => {
     const newRequest = await ServiceRequest.create({
       customerId,
       workerId,
-      requestedSkill: skill,
       message: (message || "").trim(),
       addressText: (addressText || "").trim(),
       location: {

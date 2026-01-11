@@ -10,18 +10,21 @@ const sendVerificationEmail = async (email, verificationCode) => {
     from: sender.from,
     to: email,
     subject: "Verify your Servify account",
-    html: VERIFICATION_EMAIL_TEMPLATE.replace("{verificationCode}", verificationCode),
+    html: VERIFICATION_EMAIL_TEMPLATE.replace(
+      "{verificationCode}",
+      verificationCode
+    ),
   });
 
   markSent(email);
-  console.log("[MAIL] verification sent:", { to: email, messageId: info.messageId });
+  console.log("[MAIL] verification sent:", {
+    to: email,
+    messageId: info.messageId,
+  });
   return info;
 };
 
 const sendWelcomeEmail = async (email, fullName) => {
-  const gate = checkCanSend(email);
-  if (!gate.ok) throw new Error(gate.reason);
-
   const info = await transporter.sendMail({
     from: sender.from,
     to: email,
