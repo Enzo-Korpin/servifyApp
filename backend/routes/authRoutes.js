@@ -5,7 +5,7 @@ import {
   verifyEmail,
   checkAuth,
   switchRole,
-} from "../controller/authController.js";
+} from "../controller/AuthController.js";
 
 import { loginValidation } from "../middleware/loginValidation.js";
 
@@ -22,7 +22,7 @@ router.post(
   "/verify-email",
   arcjetProtection,
   verifyEmailValidation,
-  verifyEmail
+  verifyEmail,
 );
 router.get("/check-auth", protectRoute, checkAuth);
 router.post("/switch-role", protectRoute, switchRole);
