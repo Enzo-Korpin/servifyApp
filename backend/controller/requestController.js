@@ -3,78 +3,45 @@ import User from "../models/user.js";
 import WorkerProfile from "../models/workerProfile.js";
 import Chat from "../models/Chat.js";
 import mongoose from "mongoose";
+import { asyncHandler } from "../middleware/asyncHandler.js";
+import { BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, PayloadTooLargeError } from "../errors/httpErrors.js";
 
-const expirePendingRequests = async () => {
-  await ServiceRequest.updateMany(
-    { status: "pending", expiresAt: { $lte: new Date() } },
-    { $set: { status: "expired" } }
-  );
-};
+const getServiceRequestsByRole = (requiredRole, fieldName) => 
+  asyncHandler(async (req, res) => {
 
-const getServiceRequestsByRole = (requiredRole, fieldName) => {
-  return async (req, res) => {
-    try {
-      const userId = req.user._id;
+    const userId = req.user._id;
 
-      await expirePendingRequests();
-
-      if (req.user.currentRole !== requiredRole) {
-        return res.status(403).json({ message: `Must be ${requiredRole}` });
-      }
-
-      const { status } = req.query; // optional filter
-      const filter = { [fieldName]: userId };
-      if (status) filter.status = status;
-
-      const requests = await ServiceRequest.find(filter).sort({
-        createdAt: -1,
-      });
-
-      return res.status(200).json({ data: requests });
-    } catch (err) {
-      return res
-        .status(500)
-        .json({ message: "Server error", error: err.message });
+    if (req.user.currentRole !== requiredRole) {
+      throw new ForbiddenError(`Must be ${requiredRole}`, "ROLE_FORBIDDEN");
     }
-  };
-};
 
-export const createServiceRequest = async (req, res) => {
-  try {
+    const { status } = req.query; // optional filter
+    const filter = { [fieldName]: userId };
+    if (status) filter.status = status;
+
+    const requests = await ServiceRequest.find(filter).sort({
+      createdAt: -1,
+    });
+
+    return res.status(200).json({ success: true, data: requests, error: null });
+
+  });
+
+
+  export const createServiceRequest = asyncHandler(async (req, res) => {
+
     const customerId = req.user._id;
-    const { workerId, requestedSkill, message, addressText, location } =
-      req.body;
+    const { workerId, message, addressText, location } = req.body;
 
     if (req.user.currentRole !== "customer") {
-      return res
-        .status(403)
-        .json({ message: "Only customers can create service requests" });
+      throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
     }
 
-    if (!workerId || !requestedSkill) {
-      return res
-        .status(400)
-        .json({ message: "workerId and requestedSkill are required" });
+    if (!workerId) {
+      throw new BadRequestError("workerId is required", "WORKER_ID_REQUIRED");
     }
     if (!location || location.lng == null || location.lat == null) {
-      return res
-        .status(400)
-        .json({ message: "location.lng and location.lat are required" });
-    }
-
-    const skill = requestedSkill.toLowerCase().trim();
-    const worker = await WorkerProfile.findById(workerId).select("skills");
-    if (!worker) return res.status(404).json({ message: "Worker not found" });
-
-    const workerSkills = (worker.skills || []).map((s) =>
-      String(s).toLowerCase().trim()
-    );
-    const requested = String(skill).toLowerCase().trim();
-
-    if (!workerSkills.includes(requested)) {
-      return res
-        .status(400)
-        .json({ message: "Worker does not have the requested skill" });
+      throw new BadRequestError("location.lng and location.lat are required", "LOCATION_REQUIRED");
     }
 
     const existingRequest = await ServiceRequest.findOne({
@@ -84,17 +51,12 @@ export const createServiceRequest = async (req, res) => {
     });
 
     if (existingRequest) {
-      return res.status(409).json({
-        message: "You already have a pending request with this worker",
-        requestId: existingRequest._id,
-      });
+      throw new ConflictError("You already have a pending request with this worker", "ALREADY_PENDING_REQUEST");
     }
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const newRequest = await ServiceRequest.create({
       customerId,
       workerId,
-      requestedSkill: skill,
       message: (message || "").trim(),
       addressText: (addressText || "").trim(),
       location: {
@@ -102,29 +64,24 @@ export const createServiceRequest = async (req, res) => {
         coordinates: [Number(location.lng), Number(location.lat)], // [lng, lat]
       },
       status: "pending",
-      expiresAt,
       chatId: null,
     });
 
-    return res.status(201).json({ message: "Request sent", data: newRequest });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
-  }
-};
+    return res.status(201).json({ success: true, data: newRequest, error: null });
 
-export const getServiceRequestsForCustomer = getServiceRequestsByRole(
-  "customer",
-  "customerId"
-);
-export const getServiceRequestsForWorker = getServiceRequestsByRole(
-  "worker",
-  "workerId"
-);
+  });
 
-export const cancelServiceRequest = async (req, res) => {
-  try {
+  export const getServiceRequestsForCustomer = getServiceRequestsByRole(
+    "customer",
+    "customerId"
+  );
+  export const getServiceRequestsForWorker = getServiceRequestsByRole(
+    "worker",
+    "workerId"
+  );
+
+  export const cancelServiceRequest = asyncHandler(async (req, res) => {
+
     const userId = req.user._id;
     const { cancelReason } = req.body;
 
@@ -132,66 +89,54 @@ export const cancelServiceRequest = async (req, res) => {
     const request = await ServiceRequest.findById(id);
 
     if (!request) {
-      return res.status(404).json({ message: "Service request not found" });
+      throw new NotFoundError("Service request not found", "SERVICE_REQUEST_NOT_FOUND");
     }
+
     if (request.customerId.toString() !== userId.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to cancel this request" });
+      throw new ForbiddenError("Not authorized to cancel this request", "NOT_AUTHORIZED");
+
     }
+
     if (request.status !== "pending") {
-      return res
-        .status(400)
-        .json({ message: "Only pending requests can be cancelled" });
+      throw new BadRequestError("Only pending requests can be cancelled", "INVALID_REQUEST_STATUS");
     }
+
     request.status = "cancelled";
     request.cancelReason = cancelReason ? cancelReason.trim() : null;
     request.cancelledAt = new Date();
 
     await request.save();
 
-    return res
-      .status(200)
-      .json({ message: "Service request cancelled", data: request });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
-  }
-};
+    return res.status(200).json({ success: true, data: request, error: null });
 
-export const acceptServiceRequest = async (req, res) => {
-  try {
+  });
+
+  export const acceptServiceRequest = asyncHandler(async (req, res) => {
+
     if (req.user.currentRole !== "worker") {
-      return res.status(403).json({ message: "Must be Worker" });
+      throw new ForbiddenError("Must be Worker", "ROLE_FORBIDDEN");
     }
     const requestId = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(requestId)) {
-      return res.status(400).json({ message: "Invalid request id" });
+      throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
     }
 
     const request = await ServiceRequest.findById(requestId);
     if (!request)
-      return res.status(404).json({ message: "Service request not found" });
+      throw new NotFoundError("Service request not found", "SERVICE_REQUEST_NOT_FOUND");
 
     if (request.workerId.toString() !== req.user._id.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to accept this request" });
+      throw new ForbiddenError("Not authorized to accept this request", "NOT_AUTHORIZED");
     }
 
     if (request.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          message: `Cannot accept request with status '${request.status}'`,
-        });
+      throw new BadRequestError(`Cannot accept request with status '${request.status}'`, "INVALID_REQUEST_STATUS");
     }
 
     if (request.expiresAt && request.expiresAt <= new Date()) {
       request.status = "expired";
       await request.save();
-      return res.status(400).json({ message: "Request expired" });
+      throw new BadRequestError("Request expired", "REQUEST_EXPIRED");
     }
     let chat = await Chat.findOne({
       customerId: request.customerId,
@@ -212,53 +157,39 @@ export const acceptServiceRequest = async (req, res) => {
 
     await request.save();
 
-    return res.status(200).json({
-      message: "Request accepted",
-      data: request,
-      chat,
-    });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
-  }
-};
+    return res.status(200).json({ success: true, data: request, error: null });
 
-export const rejectServiceRequest = async (req, res) => {
-  try {
+  });
+
+  export const rejectServiceRequest = asyncHandler(async (req, res) => {
+
     if (req.user.currentRole !== "worker") {
-      return res.status(403).json({ message: "Must be Worker" });
+      throw new ForbiddenError("Must be Worker", "ROLE_FORBIDDEN");
     }
 
     const requestId = req.params.id;
     const { rejectReason } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(requestId)) {
-      return res.status(400).json({ message: "Invalid request id" });
+      throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
     }
 
     const request = await ServiceRequest.findById(requestId);
     if (!request)
-      return res.status(404).json({ message: "Service request not found" });
+      throw new NotFoundError("Service request not found", "SERVICE_REQUEST_NOT_FOUND");
 
     if (request.workerId.toString() !== req.user._id.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to reject this request" });
+      throw new ForbiddenError("Not authorized to reject this request", "NOT_AUTHORIZED");
     }
 
     if (request.status !== "pending") {
-      return res
-        .status(400)
-        .json({
-          message: `Cannot reject request with status '${request.status}'`,
-        });
+      throw new BadRequestError(`Cannot reject request with status '${request.status}'`, "INVALID_REQUEST_STATUS");
     }
 
     if (request.expiresAt && request.expiresAt <= new Date()) {
       request.status = "expired";
       await request.save();
-      return res.status(400).json({ message: "Request expired" });
+      throw new BadRequestError("Request expired", "REQUEST_EXPIRED");
     }
 
     request.status = "rejected";
@@ -267,10 +198,6 @@ export const rejectServiceRequest = async (req, res) => {
 
     await request.save();
 
-    return res.status(200).json({ message: "Request rejected", data: request });
-  } catch (err) {
-    return res
-      .status(500)
-      .json({ message: "Server error", error: err.message });
-  }
-};
+    return res.status(200).json({ success: true, data: request, error: null });
+
+  });

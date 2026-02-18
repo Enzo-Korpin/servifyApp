@@ -3,7 +3,7 @@ dotenv.config();
 
 const DAILY_LIMIT = Number(process.env.EMAIL_DAILY_LIMIT || 50);
 const PER_RECIPIENT_DAILY_LIMIT = Number(process.env.EMAIL_PER_RECIPIENT_DAILY_LIMIT || 3);
-const COOLDOWN_SECONDS = Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 300);
+const COOLDOWN_SECONDS = Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 120);
 
 // In-memory limits (OK for now). For production use Redis.
 const state = {

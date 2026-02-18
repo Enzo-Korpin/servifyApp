@@ -8,6 +8,8 @@ import requestRoutes from "./routes/requestRoutes.js";
 import followRoutes from "./routes/followRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import { connectDB } from "./db/connectDB.js";
+import { notFound } from "./middleware/notFound.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 dotenv.config();
@@ -21,7 +23,10 @@ app.use("/api/request", requestRoutes);
 app.use("/api", followRoutes);
 app.use("/api/customer", customerRoutes);
 
-const PORT = process.env.PORT;
+app.use(notFound);
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   connectDB();

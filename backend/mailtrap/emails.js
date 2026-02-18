@@ -19,8 +19,6 @@ const sendVerificationEmail = async (email, verificationCode) => {
 };
 
 const sendWelcomeEmail = async (email, fullName) => {
-  const gate = checkCanSend(email);
-  if (!gate.ok) throw new Error(gate.reason);
 
   const info = await transporter.sendMail({
     from: sender.from,

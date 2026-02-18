@@ -6,14 +6,15 @@ import WorkerProfile from "../models/workerProfile.js";
 import { generateVerificationCode } from "../utils/generateVerficationCode.js";
 import { generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.js";
 import { sendVerificationEmail, sendWelcomeEmail } from "../mailtrap/emails.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
+import { BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, PayloadTooLargeError } from "../errors/httpErrors.js";
+import { error } from "console";
 
-// Fix It later
 const hashCode = (code) =>
   crypto.createHash("sha256").update(String(code)).digest("hex");
 
-export const signupUser = async (req, res) => {
+export const signupUser = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
-
   try {
     const {
       fullName,
@@ -28,15 +29,22 @@ export const signupUser = async (req, res) => {
       skills,
     } = req.body;
 
+    if (!fullName || !email || !password || lat == null || lng == null || !role) {
+      throw new BadRequestError("Missing required fields");
+    }
+
+    if (!["customer", "worker"].includes(role)) {
+      throw new BadRequestError("Invalid role");
+    }
+
     const exists = await User.exists({ email });
 
     if (exists) {
-      return res.status(409).json({ message: "User already exists" });
+      throw new ConflictError("User already exists");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = generateVerificationCode();
-    // Fix It later
     const verificationCodeHash = hashCode(verificationCode);
     const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
@@ -46,7 +54,7 @@ export const signupUser = async (req, res) => {
       const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3);
 
       if (image.length > MAX_BASE64_LENGTH) {
-        return res.status(413).json({ message: "Image too large" });
+        throw new PayloadTooLargeError("Image too large");
       }
 
       const uploadResponse = await cloudinary.uploader.upload(image, {
@@ -67,15 +75,11 @@ export const signupUser = async (req, res) => {
             fullName,
             email,
             password: hashedPassword,
-            location: {
-              type: "Point",
-              coordinates: [lng, lat],
-            },
+            location: { type: "Point", coordinates: [lng, lat] },
             image: imageUrl ?? null,
             role,
             currentRole: role,
             isVerified: false,
-            // Fix It later
             verificationCodeHash,
             verificationCodeExpiry,
           },
@@ -102,94 +106,76 @@ export const signupUser = async (req, res) => {
       }
     });
 
-    sendVerificationEmail(createdUser.email, verificationCode).catch(
-      console.error
-    );
+    sendVerificationEmail(createdUser.email, verificationCode).catch(console.error);
 
     const safeUser = createdUser.toObject();
     safeUser.password = undefined;
     safeUser.verificationCodeHash = undefined;
     safeUser.verificationCodeExpiry = undefined;
 
-    return res.status(201).json({
-      message: "User created successfully",
-      user: safeUser,
-    });
-  } catch (error) {
-    console.error("Error in registerUser:", error);
-    return res.status(500).json({ message: "Failed to create user", error });
+    return res.status(201).json({ success: true, data: safeUser, error: null });
   } finally {
     session.endSession();
   }
-};
+});
 
-export const loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+export const loginUser = asyncHandler(async (req, res) => {
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "Invalid credentials" });
-    }
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-    if (!user.isVerified) {
-      return res
-        .status(403)
-        .json({ message: "Login failed Email not verified" });
-    }
-    generateTokenAndSetCookie(res, user._id);
-    res.status(200).json({
-      message: "Login successful",
-      user: {
-        ...user._doc,
-        password: undefined,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Login failed", error });
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    throw new BadRequestError("Missing email or password", "MISSING_CREDENTIALS");
   }
-};
 
-export const verifyEmail = async (req, res) => {
-  try {
-    const { verificationCode, email } = req.body;
-
-    const codeHash = hashCode(verificationCode);
-    console.log(codeHash);
-
-    const user = await User.findOne({
-      email,
-      verificationCodeHash: codeHash,
-      verificationCodeExpiry: { $gt: new Date() },
-    });
-
-    if (!user) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or expired verification code" });
-    }
-    user.isVerified = true;
-    safeUser.verificationCodeHash = undefined;
-    user.verificationCodeExpiry = undefined;
-
-    await user.save();
-
-    await sendWelcomeEmail(user.email, user.fullName);
-
-    res.status(200).json({
-      message: "Email verified successfully",
-      user: {
-        ...user._doc,
-        password: undefined,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Email verification failed", error });
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new NotFoundError("User not found - Invalid credentials", "INVALID_CREDENTIALS");
   }
-};
+
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    throw new UnauthorizedError("Invalid credentials", "INVALID_CREDENTIALS");
+  }
+
+  if (!user.isVerified) {
+    throw new ForbiddenError("Email not verified", "EMAIL_NOT_VERIFIED");
+  }
+
+  generateTokenAndSetCookie(res, user._id);
+
+  const safeUser = user.toObject();
+  safeUser.password = undefined;
+  return res.status(200).json({ success: true, data: safeUser, error: null });
+});
+
+
+export const verifyEmail = asyncHandler(async (req, res) => {
+
+  const { verificationCode } = req.body;
+  if (!verificationCode) {
+    throw new BadRequestError("verificationCode is required", "MISSING_VERIFICATION_CODE");
+  }
+  const codeHash = hashCode(verificationCode);
+
+
+  const user = await User.findOne({
+    verificationCodeHash: codeHash,
+    verificationCodeExpiry: { $gt: new Date() },
+  });
+
+  if (!user) {
+    throw new BadRequestError("Invalid or expired verification code", "INVALID_OR_EXPIRED_CODE");
+  }
+  user.isVerified = true;
+  user.verificationCodeHash = undefined;
+  user.verificationCodeExpiry = undefined;
+
+  await user.save();
+
+  await sendWelcomeEmail(user.email, user.fullName);
+
+  return res.status(200).json({ success: true, data: user, error: null });
+});
 
 export const checkAuth = (req, res) => {
   try {
@@ -200,46 +186,34 @@ export const checkAuth = (req, res) => {
   }
 };
 
-export const switchRole = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { targetRole } = req.body;
+export const switchRole = asyncHandler(async (req, res) => {
 
-    if (!["customer", "worker"].includes(targetRole)) {
-      return res.status(400).json({ message: "Invalid target role" });
-    }
+  const userId = req.user._id;
+  const { targetRole } = req.body;
 
-    if (req.user.role === "customer" && targetRole === "worker") {
-      return res.status(403).json({
-        message: "Customers are not allowed to switch to worker",
-      });
-    }
-
-    if (targetRole === "worker") {
-      const hasProfile = await WorkerProfile.exists({ _id: userId });
-      if (!hasProfile) {
-        return res
-          .status(409)
-          .json({ message: "Worker profile does not exist" });
-      }
-    }
-
-    if (req.user.currentRole === targetRole) {
-      return res.status(200).json({
-        message: "Already in this role",
-        currentRole: req.user.currentRole,
-      });
-    }
-
-    req.user.currentRole = targetRole;
-    await req.user.save();
-
-    return res.status(200).json({
-      message: "Role switched successfully",
-      currentRole: req.user.currentRole,
-    });
-  } catch (error) {
-    console.error("switchRole error:", error);
-    return res.status(500).json({ message: "Failed to switch role" });
+  if (!["customer", "worker"].includes(targetRole)) {
+    throw new BadRequestError("Invalid target role", "INVALID_TARGET_ROLE");
   }
-};
+
+  if (req.user.role === "customer" && targetRole === "worker") {
+    throw new ForbiddenError("Customers are not allowed to switch to worker", "ROLE_SWITCH_FORBIDDEN");
+  }
+
+  if (targetRole === "worker") {
+    const hasProfile = await WorkerProfile.exists({ _id: userId });
+
+    if (!hasProfile) {
+      throw new ConflictError("Worker profile does not exist", "WORKER_PROFILE_NOT_FOUND");
+    }
+  }
+
+  if (req.user.currentRole === targetRole) {
+    return res.status(200).json({success: true, data: { currentRole: req.user.currentRole, changed: false }, error: null});
+  }
+
+  req.user.currentRole = targetRole;
+  await req.user.save();
+
+  return res.status(200).json({ success: true, data: { currentRole: req.user.currentRole, changed: true }, error: null });
+
+});

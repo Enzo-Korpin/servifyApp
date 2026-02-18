@@ -16,14 +16,6 @@ const serviceRequestSchema = new mongoose.Schema(
       index: true,
     },
 
-    // What service type (plumber/electrician…)
-    requestedSkill: {
-      type: String,
-      trim: true,
-      required: true,
-      index: true
-    },
-
     message: {
       type: String,
       trim: true,
@@ -56,14 +48,8 @@ const serviceRequestSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "accepted", "rejected", "cancelled", "expired"],
+      enum: ["pending", "accepted", "rejected", "cancelled"],
       default: "pending",
-      index: true,
-    },
-
-    expiresAt: {
-      type: Date,
-      required: true,
       index: true,
     },
 

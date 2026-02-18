@@ -1,5 +1,6 @@
 import { aj } from "../lib/arcjet.js";
-
+import { asyncHandler } from "../middleware/asyncHandler.js";
+import { BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError, PayloadTooLargeError } from "../errors/httpErrors.js";
 export const arcjetProtection = async (req, res, next) => {
   try {
     const decision = await aj.protect(req, {
@@ -8,14 +9,14 @@ export const arcjetProtection = async (req, res, next) => {
 
     if (decision.isDenied()) {
       if (decision.reason.isRateLimit()) {
-        return res.status(429).json({ error: "Too Many Requests" });
+        throw new PayloadTooLargeError("Rate limit exceeded", "RATE_LIMIT_EXCEEDED");
       }
 
       if (decision.reason.isBot()) {
-        return res.status(403).json({ error: "Bot access denied" });
+        throw new ForbiddenError("Bot access denied", "BOT_ACCESS_DENIED");
       }
 
-      return res.status(403).json({ error: "Forbidden" });
+      throw new ForbiddenError("Access denied", "ACCESS_DENIED");
     }
 
     // Spoofed bot check
@@ -24,7 +25,7 @@ export const arcjetProtection = async (req, res, next) => {
         (result) => result.reason.isBot() && result.reason.isSpoofed()
       )
     ) {
-      return res.status(403).json({ error: "Spoofed bot detected" });
+      throw new ForbiddenError("Spoofed bot detected", "SPOOFED_BOT_DETECTED");
     }
 
     next();
