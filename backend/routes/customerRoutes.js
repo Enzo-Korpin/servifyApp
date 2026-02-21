@@ -7,7 +7,8 @@ import {
   updateCustomerProfile,
   getFilteredWorkers,
   searchWorkersByName,
-} from "../controller/customerController.js";
+  getLocation,
+} from "../service/customerService.js";
 import { filterValidation } from "../middleware/filterValidation.js";
 import { searchTextValidation } from "../middleware/searchTextValidation.js";
 
@@ -20,14 +21,16 @@ router.get(
   "/filtered-workers",
   protectRoute,
   filterValidation,
-  getFilteredWorkers
+  getFilteredWorkers,
 );
 
 router.get(
   "/search-workers",
   protectRoute,
   searchTextValidation,
-  searchWorkersByName
+  searchWorkersByName,
 );
+
+router.get("/get-location", protectRoute, getLocation);
 
 export default router;

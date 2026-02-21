@@ -1,7 +1,7 @@
-import { verifyEmailValidator } from "../validators/verifyEmailValidator.js";
+import { resendCodeValidator } from "../validators/resendCodeValidator.js";
 
-export const verifyEmailValidation = (req, res, next) => {
-  const { error, value } = verifyEmailValidator(req.body ?? {}, {
+export const resendCodeValidation = (req, res, next) => {
+  const { error, value } = resendCodeValidator(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,
     convert: true,

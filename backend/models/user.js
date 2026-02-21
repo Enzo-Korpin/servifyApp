@@ -45,17 +45,12 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    verificationCodeHash: {
-      type: String,
-    },
-    verificationCodeExpiry: {
-      type: Date,
-    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 userSchema.index({ location: "2dsphere" });
+userSchema.index({ role: 1, fullName: 1, _id: 1 });
 
 const User = mongoose.model("User", userSchema);
 export default User;

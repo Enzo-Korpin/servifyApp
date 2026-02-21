@@ -2,7 +2,7 @@ import express from "express";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
 
-import { getWorkerStatus, switchRole } from "../controller/workerController.js";
+import { getWorkerStatus, switchRole } from "../service/workerService.js";
 
 const router = express.Router();
 

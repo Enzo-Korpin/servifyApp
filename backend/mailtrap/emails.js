@@ -12,7 +12,7 @@ const sendVerificationEmail = async (email, verificationCode) => {
     subject: "Verify your Servify account",
     html: VERIFICATION_EMAIL_TEMPLATE.replace(
       "{verificationCode}",
-      verificationCode
+      verificationCode,
     ),
   });
 

@@ -10,6 +10,8 @@ import customerRoutes from "./routes/customerRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import { connectDB } from "./db/connectDB.js";
+import { RouteNotFound } from "./middleware/routeNoteFound.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 dotenv.config();
@@ -25,7 +27,10 @@ app.use("/api/customer", customerRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
 
-const PORT = process.env.PORT;
+app.use(RouteNotFound);
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   connectDB();

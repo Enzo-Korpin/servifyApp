@@ -8,9 +8,9 @@ export const searchTextValidation = (req, res, next) => {
   });
   if (error)
     return res.status(400).json({
-      message: error.details.map((detail) =>
-        detail.message.replace(/['"]/g, "")
-      ),
+      success: false,
+      data: null,
+      error: error.details.map((detail) => detail.message.replace(/['"]/g, "")),
     });
   req.validateQuery = value;
   next();

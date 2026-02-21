@@ -6,7 +6,7 @@ import {
   unfollowWorker,
   getAllFollowingWorkers,
   getFollowingWorker,
-} from "../controller/followController.js";
+} from "../service/followService.js";
 
 const router = express.Router();
 

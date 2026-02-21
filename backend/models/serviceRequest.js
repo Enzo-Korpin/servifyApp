@@ -6,21 +6,12 @@ const serviceRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     workerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
-    },
-
-    // What service type (plumber/electrician…)
-    requestedSkill: {
-      type: String,
-      trim: true,
-      index: true,
     },
 
     message: {
@@ -55,17 +46,10 @@ const serviceRequestSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "accepted", "completed", "rejected", "cancelled"],
+      enum: ["pending", "accepted", "rejected", "cancelled"],
       default: "pending",
-      index: true,
     },
 
-    hasFeedback: {
-      type: Boolean,
-      default: false,
-    },
-
-    ratedAt: { type: Date, default: null },
     acceptedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
@@ -75,19 +59,23 @@ const serviceRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Chat",
       default: null,
-      index: true,
     },
 
     rejectReason: { type: String, trim: true, default: null },
     cancelReason: { type: String, trim: true, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 serviceRequestSchema.index({ location: "2dsphere" });
 
-serviceRequestSchema.index({ workerId: 1, status: 1 });
-serviceRequestSchema.index({ customerId: 1, status: 1 });
+serviceRequestSchema.index({
+  customerId: 1,
+  status: 1,
+  createdAt: -1,
+  _id: -1,
+});
+serviceRequestSchema.index({ workerId: 1, status: 1, createdAt: -1, _id: -1 });
 
 serviceRequestSchema.index({ status: 1, expiresAt: 1 });
 export default mongoose.model("ServiceRequest", serviceRequestSchema);

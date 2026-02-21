@@ -9,6 +9,15 @@ export const searchTextValidator = (data, options) => {
       "string.max": "Search text must be at most {#limit} characters",
       "any.required": "Search text is required",
     }),
+    after: Joi.string().trim().optional().messages({
+      "string.base": "Cursor must be a string",
+    }),
+    limit: Joi.number().integer().min(1).max(50).optional().messages({
+      "number.base": "Limit must be a number",
+      "number.integer": "Limit must be an integer",
+      "number.min": "Limit must be at least {#limit}",
+      "number.max": "Limit must be at most {#limit}",
+    }),
   }).unknown(false);
   return schema.validate(data, options);
 };

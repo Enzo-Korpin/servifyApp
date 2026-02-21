@@ -27,8 +27,6 @@ const feedbackSchema = new mongoose.Schema(
     },
     comment: {
       type: String,
-      trim: true,
-      maxlength: 1000,
       default: "",
     },
   },
