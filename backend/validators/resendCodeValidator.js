@@ -1,6 +1,6 @@
 import Joi from "joi";
 
-export const verifyEmailValidator = (data, options) => {
+export const resendCodeValidator = (data, options) => {
   const schema = Joi.object({
     email: Joi.string()
       .trim()
@@ -11,16 +11,6 @@ export const verifyEmailValidator = (data, options) => {
         "string.email": "Please provide a valid email",
         "string.empty": "email is required",
         "any.required": "email is required",
-      }),
-
-    verificationCode: Joi.string()
-      .trim()
-      .pattern(/^\d{6}$/)
-      .required()
-      .messages({
-        "string.empty": "code is required",
-        "any.required": "code is required",
-        "string.pattern.base": "code must be exactly 6 digits",
       }),
   }).unknown(false);
 

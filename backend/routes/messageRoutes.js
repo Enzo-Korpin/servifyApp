@@ -3,7 +3,7 @@ import {
   getMessages,
   getUsersForSidebar,
   sendMessage,
-} from "../controller/messageController.js";
+} from "../service/messageService.js";
 import { protectRoute } from "../middleware/protecteRoute.js";
 
 import { sendMessageValidation } from "../middleware/messageValidation.js";

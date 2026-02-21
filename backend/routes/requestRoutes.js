@@ -6,16 +6,33 @@ import {
   getServiceRequestsForWorker,
   cancelServiceRequest,
   acceptServiceRequest,
-  rejectServiceRequest,} from "../controller/requestController.js";
+  rejectServiceRequest,
+} from "../service/requestService.js";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
+import { createServiceRequestValidator } from "../validators/createServiceRequestValidator.js";
 const router = express.Router();
 
-router.post("/service-requests", protectRoute, createServiceRequest);
-router.get("/service-requests/customer", protectRoute, getServiceRequestsForCustomer);
-router.patch("/service-requests/:id/cancel", protectRoute, cancelServiceRequest);
+router.post(
+  "/service-requests",
+  protectRoute,
+  createServiceRequestValidator,
+  createServiceRequest,
+);
 
-router.get("/service-requests/worker", protectRoute, getServiceRequestsForWorker);
-router.patch("/service-requests/:id/accept", protectRoute, acceptServiceRequest);
-router.patch("/service-requests/:id/reject", protectRoute, rejectServiceRequest);
+router.put("/service-requests/:id/cancel", protectRoute, cancelServiceRequest);
+
+router.get(
+  "/service-requests/customer",
+  protectRoute,
+  getServiceRequestsForCustomer,
+);
+
+router.get(
+  "/service-requests/worker",
+  protectRoute,
+  getServiceRequestsForWorker,
+);
+router.put("/service-requests/:id/accept", protectRoute, acceptServiceRequest);
+router.put("/service-requests/:id/reject", protectRoute, rejectServiceRequest);
 export default router;

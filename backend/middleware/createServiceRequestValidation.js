@@ -1,7 +1,7 @@
-import { verifyEmailValidator } from "../validators/verifyEmailValidator.js";
+import { createServiceRequestValidator } from "../validators/createServiceRequestValidator.js";
 
-export const verifyEmailValidation = (req, res, next) => {
-  const { error, value } = verifyEmailValidator(req.body ?? {}, {
+export const verifyServiceRequestValidation = (req, res, next) => {
+  const { error, value } = createServiceRequestValidator(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,
     convert: true,

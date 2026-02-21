@@ -25,6 +25,15 @@ export const filterValidator = (data, options) => {
         "string.base": "Sort must be a string",
         "any.only": "Sort must be one of: distance, rating, ratingCount",
       }),
+    limit: Joi.number().integer().min(1).max(50).optional().messages({
+      "number.base": "Limit must be a number",
+      "number.integer": "Limit must be an integer",
+      "number.min": "Limit must be at least {#limit}",
+      "number.max": "Limit must be at most {#limit}",
+    }),
+    after: Joi.string().trim().optional().messages({
+      "string.base": "Cursor must be a string",
+    }),
   }).unknown(false);
 
   return schema.validate(data, options);

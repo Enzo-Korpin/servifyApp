@@ -67,13 +67,18 @@ const serviceRequestSchema = new mongoose.Schema(
     rejectReason: { type: String, trim: true, default: null },
     cancelReason: { type: String, trim: true, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 serviceRequestSchema.index({ location: "2dsphere" });
 
-serviceRequestSchema.index({ workerId: 1, status: 1 });
-serviceRequestSchema.index({ customerId: 1, status: 1 });
+serviceRequestSchema.index({
+  customerId: 1,
+  status: 1,
+  createdAt: -1,
+  _id: -1,
+});
+serviceRequestSchema.index({ workerId: 1, status: 1, createdAt: -1, _id: -1 });
 
 serviceRequestSchema.index({ status: 1, expiresAt: 1 });
 export default mongoose.model("ServiceRequest", serviceRequestSchema);

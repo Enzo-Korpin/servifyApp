@@ -1,34 +1,33 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
+import { asyncHandler } from "./asyncHandler.js";
+import { UnauthorizedError } from "../errors/httpErrors.js";
 
-export const protectRoute = async (req, res, next) => {
-  try {
-    const token = req.cookies.token;
+export const protectRoute = asyncHandler(async (req, res, next) => {
+  const token = req.cookies.token;
 
-    if (!token) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized - No Token Provided" });
-    }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized - Invalid or Expired Token" });
-    }
-
-    const user = await User.findById(decoded.userId).select("-password");
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized - User Not Found" });
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    console.log("Error in protectRoute middleware:", error.message);
-    return res.status(500).json({ message: "Internal server error" });
+  if (!token) {
+    throw new UnauthorizedError("Unauthorized - No Token Provided", "NO_TOKEN");
   }
-};
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    throw new UnauthorizedError(
+      "Unauthorized - Invalid or Expired Token",
+      "INVALID_TOKEN",
+    );
+  }
+
+  const user = await User.findById(decoded.userId).select("-password");
+  if (!user) {
+    throw new UnauthorizedError(
+      "Unauthorized - User Not Found",
+      "USER_NOT_FOUND",
+    );
+  }
+
+  req.user = user;
+  next();
+});
