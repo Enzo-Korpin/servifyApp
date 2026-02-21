@@ -12,28 +12,32 @@ const workerProfileSchema = new mongoose.Schema(
     },
     yearsOfExperience: {
       type: Number,
-      require: true,
+      required: true,
+      default: 0,
+    },
+    ratingSum: {
+      type: Number,
+      default: 0,
+    },
+    ratingCount: {
+      type: Number,
       default: 0,
     },
     rate: {
       type: Number,
       default: 0,
     },
-    numberOfRatings: {
-      type: Number,
-      default: 0,
-    },
     skills: {
       type: [String],
       required: true,
-      set: (skills) => skills.map(s => s.toLowerCase().trim()),
+      set: (skills) => skills.map((s) => s.toLowerCase().trim()),
       validate: {
         validator: (v) => Array.isArray(v) && v.length > 0,
-        message: "Worker must have at least one skill"
-      }
+        message: "Worker must have at least one skill",
+      },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const WorkerProfile = mongoose.model("WorkerProfile", workerProfileSchema);

@@ -7,6 +7,8 @@ import messageRoutes from "./routes/messageRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
 import followRoutes from "./routes/followRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
+import feedbackRoutes from "./routes/feedbackRoutes.js";
+import workerRoutes from "./routes/workerRoutes.js";
 import { connectDB } from "./db/connectDB.js";
 
 const app = express();
@@ -20,6 +22,8 @@ app.use("/api/message", messageRoutes);
 app.use("/api/request", requestRoutes);
 app.use("/api", followRoutes);
 app.use("/api/customer", customerRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/worker", workerRoutes);
 
 const PORT = process.env.PORT;
 

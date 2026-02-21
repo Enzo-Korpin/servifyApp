@@ -26,10 +26,10 @@ export const getFilteredWorkers = async (req, res) => {
       sort === "distance"
         ? { distanceMeters: 1 }
         : sort === "rating"
-        ? { "workerProfile.rate": -1, distanceMeters: 1 }
-        : sort === "ratingCount"
-        ? { "workerProfile.numberOfRatings": -1, distanceMeters: 1 }
-        : null;
+          ? { "workerProfile.rate": -1, distanceMeters: 1 }
+          : sort === "ratingCount"
+            ? { "workerProfile.ratingCount": -1, distanceMeters: 1 }
+            : null;
 
     if (!sortStage) {
       return res.status(400).json({
