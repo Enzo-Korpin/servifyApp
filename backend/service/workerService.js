@@ -12,6 +12,10 @@ import {
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
 
+export const getWorkerProfile = asyncHandler(async (req, res) => {});
+
+export const updateWorkerProfile = asyncHandler(async (req, res) => {});
+
 export const switchRole = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { targetRole } = req.body;

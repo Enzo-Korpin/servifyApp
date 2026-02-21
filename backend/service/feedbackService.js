@@ -48,6 +48,14 @@ export const submitFeedback = asyncHandler(async (req, res) => {
       );
     }
 
+    if (serviceRequest.status !== "accepted") {
+      await safeAbort();
+      throw new BadRequestError(
+        "Cannot submit feedback unless request is accepted",
+        "REQUEST_NOT_ACCEPTED",
+      );
+    }
+
     const feedbackDoc = await Feedback.create(
       [
         {

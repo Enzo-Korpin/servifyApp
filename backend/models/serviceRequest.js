@@ -53,7 +53,6 @@ const serviceRequestSchema = new mongoose.Schema(
     acceptedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
-    completedAt: { type: Date, default: null },
 
     chatId: {
       type: mongoose.Schema.Types.ObjectId,

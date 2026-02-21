@@ -175,11 +175,6 @@ export const acceptServiceRequest = asyncHandler(async (req, res) => {
     );
   }
 
-  if (request.expiresAt && request.expiresAt <= new Date()) {
-    request.status = "expired";
-    await request.save();
-    throw new BadRequestError("Request expired", "REQUEST_EXPIRED");
-  }
   let chat = await Chat.findOne({
     customerId: request.customerId,
     workerId: request.workerId,
@@ -230,12 +225,6 @@ export const rejectServiceRequest = asyncHandler(async (req, res) => {
       `Cannot reject request with status '${request.status}'`,
       "INVALID_REJECT_STATUS",
     );
-  }
-
-  if (request.expiresAt && request.expiresAt <= new Date()) {
-    request.status = "expired";
-    await request.save();
-    throw new BadRequestError("Request expired", "REQUEST_EXPIRED");
   }
 
   request.status = "rejected";
