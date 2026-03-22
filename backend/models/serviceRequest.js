@@ -37,10 +37,6 @@ const serviceRequestSchema = new mongoose.Schema(
       coordinates: {
         type: [Number],
         required: true,
-        validate: {
-          validator: (v) => Array.isArray(v) && v.length === 2,
-          message: "coordinates must be [lng, lat]",
-        },
       },
     },
 

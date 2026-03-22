@@ -94,7 +94,7 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
     }
   } else if (sort === "ratingCount") {
     sortStage = {
-      "workerProfile.numberOfRatings": -1,
+      "workerProfile.ratingCount": -1,
       distanceMeters: 1,
       _id: 1,
     };
@@ -114,13 +114,13 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
 
       cursorMatch = {
         $or: [
-          { "workerProfile.numberOfRatings": { $lt: count } },
+          { "workerProfile.ratingCount": { $lt: count } },
           {
-            "workerProfile.numberOfRatings": count,
+            "workerProfile.ratingCount": count,
             distanceMeters: { $gt: distance },
           },
           {
-            "workerProfile.numberOfRatings": count,
+            "workerProfile.ratingCount": count,
             distanceMeters: distance,
             _id: { $gt: new mongoose.Types.ObjectId(id) },
           },
@@ -179,7 +179,7 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
     } else if (sort === "rating") {
       nextCursor = `${last.workerProfile.rate}|${last.distanceMeters}|${last._id}`;
     } else if (sort === "ratingCount") {
-      nextCursor = `${last.workerProfile.numberOfRatings}|${last.distanceMeters}|${last._id}`;
+      nextCursor = `${last.workerProfile.ratingCount}|${last.distanceMeters}|${last._id}`;
     }
   }
 
@@ -210,9 +210,16 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
       throw new BadRequestError("Invalid cursor", "INVALID_CURSOR");
     }
 
-    query.$or = [
-      { fullName: { $gt: afterName } },
-      { fullName: afterName, _id: { $gt: afterId } },
+    query.$and = [
+      {
+        $or: [
+          { fullName: { $gt: afterName } },
+          {
+            fullName: afterName,
+            _id: { $gt: new mongoose.Types.ObjectId(afterId) }, // CAST THIS
+          },
+        ],
+      },
     ];
   }
 

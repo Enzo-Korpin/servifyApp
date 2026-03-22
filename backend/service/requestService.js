@@ -21,14 +21,15 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
       throw new ForbiddenError(`Must be ${requiredRole}`, "ROLE_FORBIDDEN");
     }
 
-    const { status, cursor } = req.query;
+    const { status } = req.query;
     const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+    const after = req.query.after;
 
     const filter = { [fieldName]: userId };
     if (status) filter.status = status;
 
-    if (cursor) {
-      const [dateStr, id] = cursor.split("|");
+    if (after) {
+      const [dateStr, id] = after.split("|");
       const date = new Date(dateStr);
 
       if (
@@ -65,6 +66,7 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
 export const createServiceRequest = asyncHandler(async (req, res) => {
   const customerId = req.user._id;
   const { workerId, message, addressText, lng, lat } = req.body;
+  console.log([lng, lat]);
 
   const location = {
     type: "Point",
@@ -108,7 +110,7 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
     addressText: (addressText || "").trim(),
     location: {
       type: "Point",
-      coordinates: [Number(location.lng), Number(location.lat)],
+      coordinates: [Number(lng), Number(lat)],
     },
     status: "pending",
     chatId: null,
@@ -119,7 +121,7 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
 
 export const cancelServiceRequest = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const { cancelReason } = req.body;
+  const { cancelReason } = req.body ?? {};
 
   const { id } = req.params;
   const request = await ServiceRequest.findById(id);
@@ -140,8 +142,8 @@ export const cancelServiceRequest = asyncHandler(async (req, res) => {
     );
   }
   request.status = "cancelled";
-  request.cancelReason = cancelReason ? cancelReason.trim() : null;
   request.cancelledAt = new Date();
+  cancelReason ? (request.cancelReason = cancelReason.trim()) : null;
 
   await request.save();
 

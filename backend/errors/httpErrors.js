@@ -12,6 +12,16 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export class TooManyRequestsError extends AppError {
+  constructor(
+    message = "Too many requests",
+    code = "TOO_MANY_REQUESTS",
+    details = null,
+  ) {
+    super(message, 429, code, details);
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(message = "Forbidden", code = "FORBIDDEN", details = null) {
     super(message, 403, code, details);
@@ -31,7 +41,11 @@ export class ConflictError extends AppError {
 }
 
 export class PayloadTooLargeError extends AppError {
-  constructor(message = "Payload too large", code = "PAYLOAD_TOO_LARGE", details = null) {
+  constructor(
+    message = "Payload too large",
+    code = "PAYLOAD_TOO_LARGE",
+    details = null,
+  ) {
     super(message, 413, code, details);
   }
 }

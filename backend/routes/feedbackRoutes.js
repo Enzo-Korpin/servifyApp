@@ -7,7 +7,7 @@ import { submitFeedbackValidation } from "../middleware/feedbackValidation.js";
 const router = express.Router();
 
 router.post(
-  "/service-requests/:requestId/feedback",
+  "/:requestId",
   protectRoute,
   submitFeedbackValidation,
   submitFeedback,

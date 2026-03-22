@@ -2,9 +2,15 @@ import { VERIFICATION_EMAIL_TEMPLATE } from "./emailTemplates.js";
 import { transporter, sender } from "./nodemailer.js";
 import { checkCanSend, markSent } from "./emailLimiter.js";
 
+import { TooManyRequestsError } from "../errors/httpErrors.js";
+
 const sendVerificationEmail = async (email, verificationCode) => {
   const gate = checkCanSend(email);
-  if (!gate.ok) throw new Error(gate.reason);
+  if (!gate.ok)
+    throw new TooManyRequestsError(
+      "Too many emails sent. Please try again later.",
+      "EMAIL_RATE_LIMIT_EXCEEDED",
+    );
 
   const info = await transporter.sendMail({
     from: sender.from,

@@ -10,29 +10,21 @@ import {
 } from "../service/requestService.js";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
+import { createServiceRequestValidation } from "../middleware/createServiceRequestValidation.js";
 
-import { createServiceRequestValidator } from "../validators/createServiceRequestValidator.js";
 const router = express.Router();
 
 router.post(
-  "/service-requests",
+  "/request",
   protectRoute,
-  createServiceRequestValidator,
+  createServiceRequestValidation,
   createServiceRequest,
 );
 
-router.get(
-  "/service-requests/customer",
-  protectRoute,
-  getServiceRequestsForCustomer,
-);
+router.get("/customer", protectRoute, getServiceRequestsForCustomer);
 
-router.get(
-  "/service-requests/worker",
-  protectRoute,
-  getServiceRequestsForWorker,
-);
-router.put("/service-requests/:id/cancel", protectRoute, cancelServiceRequest);
-router.put("/service-requests/:id/accept", protectRoute, acceptServiceRequest);
-router.put("/service-requests/:id/reject", protectRoute, rejectServiceRequest);
+router.get("/worker", protectRoute, getServiceRequestsForWorker);
+router.put("/:id/cancel", protectRoute, cancelServiceRequest);
+router.put("/:id/accept", protectRoute, acceptServiceRequest);
+router.put("/:id/reject", protectRoute, rejectServiceRequest);
 export default router;

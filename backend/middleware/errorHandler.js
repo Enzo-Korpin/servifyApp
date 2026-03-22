@@ -40,22 +40,11 @@ export const errorHandler = (err, req, res, next) => {
   const code = isAppError ? normalized.code : "INTERNAL_SERVER_ERROR";
 
   // Don’t leak stack/unknown errors in production
-  const message =
-    isAppError
-      ? normalized.message
-      : process.env.NODE_ENV === "production"
-        ? "Something went wrong"
-        : (normalized?.message || "Something went wrong");
-
-  // Log once here (centralized)
-  console.error("❌ API Error", {
-    code,
-    statusCode,
-    message: normalized?.message,
-    path: req.originalUrl,
-    method: req.method,
-    stack: normalized?.stack,
-  });
+  const message = isAppError
+    ? normalized.message
+    : process.env.NODE_ENV === "production"
+      ? "Something went wrong"
+      : normalized?.message || "Something went wrong";
 
   return res.status(statusCode).json({
     success: false,

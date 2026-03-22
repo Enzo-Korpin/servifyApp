@@ -1,6 +1,6 @@
 import { createServiceRequestValidator } from "../validators/createServiceRequestValidator.js";
 
-export const verifyServiceRequestValidation = (req, res, next) => {
+export const createServiceRequestValidation = (req, res, next) => {
   const { error, value } = createServiceRequestValidator(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,

@@ -15,6 +15,7 @@ import {
   NotFoundError,
   ConflictError,
   PayloadTooLargeError,
+  TooManyRequestsError,
 } from "../errors/httpErrors.js";
 import { error } from "console";
 
@@ -218,8 +219,6 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     await sendWelcomeEmail(safeUser.email, safeUser.fullName);
 
     return res.status(200).json({ success: true, data: safeUser, error: null });
-  } catch (error) {
-    res.status(500).json({ message: "Email verification failed", error });
   } finally {
     session.endSession();
   }
@@ -228,7 +227,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
 export const resendVerificationCode = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
-  const MAX_RESENDS = 2;
+  const MAX_RESENDS = 3;
 
   const verificationCode = generateVerificationCode();
   const verificationCodeHash = hashCode(verificationCode);
@@ -268,6 +267,8 @@ export const resendVerificationCode = asyncHandler(async (req, res) => {
 
     if (!exists)
       throw new NotFoundError("User not found", "INVALID_CREDENTIALS");
+
+    console.log(exists.resendCount);
 
     if ((exists.resendCount ?? 0) >= MAX_RESENDS)
       throw new TooManyRequestsError(
@@ -339,11 +340,9 @@ export const switchRole = asyncHandler(async (req, res) => {
   req.user.currentRole = targetRole;
   await req.user.save();
 
-  return res
-    .status(200)
-    .json({
-      success: true,
-      data: { currentRole: req.user.currentRole, changed: true },
-      error: null,
-    });
+  return res.status(200).json({
+    success: true,
+    data: { currentRole: req.user.currentRole, changed: true },
+    error: null,
+  });
 });
