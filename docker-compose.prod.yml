@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  servify-api:
+    build: .
+    container_name: servify_backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    restart: always

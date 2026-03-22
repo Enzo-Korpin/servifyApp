@@ -1,9 +1,13 @@
-import dotenv from "dotenv";
-dotenv.config();
+// import dotenv from "dotenv";
+// dotenv.config();
 
 const DAILY_LIMIT = Number(process.env.EMAIL_DAILY_LIMIT || 50);
-const PER_RECIPIENT_DAILY_LIMIT = Number(process.env.EMAIL_PER_RECIPIENT_DAILY_LIMIT || 3);
-const COOLDOWN_SECONDS = Number(process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 120);
+const PER_RECIPIENT_DAILY_LIMIT = Number(
+  process.env.EMAIL_PER_RECIPIENT_DAILY_LIMIT || 3,
+);
+const COOLDOWN_SECONDS = Number(
+  process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 120,
+);
 
 // In-memory limits (OK for now). For production use Redis.
 const state = {
@@ -40,8 +44,10 @@ export function checkCanSend(toEmail) {
   const now = Date.now();
 
   // cooldown
-  if (entry.lastSentAt && (now - entry.lastSentAt) < COOLDOWN_SECONDS * 1000) {
-    const wait = Math.ceil((COOLDOWN_SECONDS * 1000 - (now - entry.lastSentAt)) / 1000);
+  if (entry.lastSentAt && now - entry.lastSentAt < COOLDOWN_SECONDS * 1000) {
+    const wait = Math.ceil(
+      (COOLDOWN_SECONDS * 1000 - (now - entry.lastSentAt)) / 1000,
+    );
     return { ok: false, reason: `Cooldown active. Try again in ${wait}s` };
   }
 
