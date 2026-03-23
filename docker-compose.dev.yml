@@ -10,7 +10,43 @@ services:
       - .env
     environment:
       - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - .:/src/app
-      - /src/app/node_modules
+      - node_modules:/src/app/node_modules
     command: npm run dev
+    depends_on:
+      - redis
+    restart: always
+
+  servify-worker:
+    build: .
+    container_name: servify_worker
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - .:/src/app
+      - node_modules:/src/app/node_modules
+    command: npm run worker
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: servify_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: always
+
+volumes:
+  redis-data:
+  node_modules:
