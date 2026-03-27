@@ -9,6 +9,7 @@ import followRoutes from "./routes/followRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
+import aiRoutes from "./ai/ai.routes.js";
 import { connectDB } from "./db/connectDB.js";
 import { RouteNotFound } from "./middleware/routeNoteFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -26,6 +27,7 @@ app.use("/api", followRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(RouteNotFound);
 app.use(errorHandler);
