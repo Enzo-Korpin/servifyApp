@@ -4,7 +4,14 @@ import { asyncHandler } from "./asyncHandler.js";
 import { UnauthorizedError } from "../errors/httpErrors.js";
 
 export const protectRoute = asyncHandler(async (req, res, next) => {
-  const token = req.cookies.token;
+  let token = req.cookies?.token;
+
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    }
+  }
 
   if (!token) {
     throw new UnauthorizedError("Unauthorized - No Token Provided", "NO_TOKEN");

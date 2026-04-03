@@ -11,10 +11,29 @@ import {
   ConflictError,
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
+import { PassThrough } from "stream";
 
 export const getWorkerProfile = asyncHandler(async (req, res) => {});
 
 export const updateWorkerProfile = asyncHandler(async (req, res) => {});
+
+export const getAllWorker = asyncHandler(async (req, res) => {
+  const workers = await WorkerProfile.find().populate("_id");
+  return res.status(200).json({ success: true, data: workers, error: null });
+});
+
+export const getWorkerById = asyncHandler(async (req, res) => {
+  const workerId = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(workerId)) {
+    throw new BadRequestError("Invalid worker ID", "INVALID_WORKER_ID");
+  }
+  const worker = await WorkerProfile.findById(workerId).populate("_id","-password");
+  if (!worker) {
+    throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
+  }
+  return res.status(200).json({ success: true, data: worker, error: null });
+});
+
 
 export const switchRole = asyncHandler(async (req, res) => {
   const userId = req.user._id;

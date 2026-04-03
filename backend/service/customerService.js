@@ -10,25 +10,60 @@ import {
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
 
-export const getCustomerProfile = asyncHandler(async (req, res) => {});
+export const getCustomerProfile = asyncHandler(async (req, res) => { });
 
-export const updateCustomerProfile = asyncHandler(async (req, res) => {});
+export const updateCustomerProfile = asyncHandler(async (req, res) => { });
 
 export const getFilteredWorkers = asyncHandler(async (req, res) => {
-  const { skill, radiusKm = 5, sort = "distance" } = req.validateQuery;
+  const { skill, radiusKm = 5, sort = "distance", lat, lng } = req.validateQuery;
 
   const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
   const after = req.query.after;
 
-  const coords = req.user?.location?.coordinates;
-  if (!coords || coords.length !== 2) {
-    throw new BadRequestError(
-      "Customer location is required",
-      "MISSING_LOCATION",
-    );
+  let customerLat;
+  let customerLng;
+
+  const hasTempLat = lat !== undefined && lat !== null;
+  const hasTempLng = lng !== undefined && lng !== null;
+
+  if (hasTempLat || hasTempLng) {
+    if (!hasTempLat || !hasTempLng) {
+      throw new BadRequestError(
+        "Both lat and lng are required together",
+        "INVALID_TEMP_LOCATION",
+      );
+    }
+
+    customerLat = Number(lat);
+    customerLng = Number(lng);
+
+    if (
+      !Number.isFinite(customerLat) ||
+      !Number.isFinite(customerLng) ||
+      customerLat < -90 ||
+      customerLat > 90 ||
+      customerLng < -180 ||
+      customerLng > 180
+    ) {
+      throw new BadRequestError(
+        "Invalid temporary location coordinates",
+        "INVALID_TEMP_LOCATION",
+      );
+    }
+  } else {
+    const coords = req.user?.location?.coordinates;
+
+    if (!coords || coords.length !== 2) {
+      throw new BadRequestError(
+        "Customer location is required",
+        "MISSING_LOCATION",
+      );
+    }
+
+    customerLng = coords[0];
+    customerLat = coords[1];
   }
 
-  const [customerLng, customerLat] = coords;
   const radiusMeters = Number(radiusKm) * 1000;
 
   if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
@@ -161,6 +196,7 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
       $project: {
         fullName: 1,
         image: 1,
+        location: 1,
         workerProfile: 1,
         distanceMeters: 1,
       },
@@ -185,7 +221,15 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
 
   return res.status(200).json({
     success: true,
-    data: { workers: workers, nextCursor: nextCursor },
+    data: {
+      workers,
+      nextCursor,
+      sourceLocation: {
+        lat: customerLat,
+        lng: customerLng,
+        temporary: hasTempLat && hasTempLng,
+      },
+    },
     error: null,
   });
 });

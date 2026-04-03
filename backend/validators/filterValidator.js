@@ -2,7 +2,7 @@ import Joi from "joi";
 
 export const filterValidator = (data, options) => {
   const schema = Joi.object({
-    skill: Joi.string().trim().min(1).max(64).required().messages({
+    skill: Joi.string().trim().min(1).max(64).optional().messages({
       "string.base": "Skill must be a string",
       "string.empty": "Skill is required",
       "string.min": "Skill must be at least {#limit} characters",
@@ -34,7 +34,31 @@ export const filterValidator = (data, options) => {
     after: Joi.string().trim().optional().messages({
       "string.base": "Cursor must be a string",
     }),
-  }).unknown(false);
+    lat: Joi.number().min(-90).max(90).optional().messages({
+      "number.base": "Latitude must be a number",
+      "number.min": "Latitude must be at least {#limit}",
+      "number.max": "Latitude must be at most {#limit}",
+    }),
+
+    lng: Joi.number().min(-180).max(180).optional().messages({
+      "number.base": "Longitude must be a number",
+      "number.min": "Longitude must be at least {#limit}",
+      "number.max": "Longitude must be at most {#limit}",
+    }),
+  })
+    .custom((value, helpers) => {
+      const hasLat = value.lat !== undefined;
+      const hasLng = value.lng !== undefined;
+
+      if (hasLat !== hasLng) {
+        return helpers.error("any.invalid");
+      }
+
+      return value;
+    })
+    .messages({
+      "any.invalid": "lat and lng must be provided together",
+    }).unknown(false);
 
   return schema.validate(data, options);
 };

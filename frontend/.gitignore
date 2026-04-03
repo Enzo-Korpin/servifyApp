@@ -1,0 +1,31 @@
+# Logs & temp
+*.log
+*.pyc
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+.pub/
+.pub-cache/
+build/
+
+# Env (CRITICAL)
+.env*
+
+# Coverage
+coverage/
+
+# Node (future-proof)
+node_modules/

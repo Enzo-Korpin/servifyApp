@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/user.js";
 import PendingUser from "../models/PendingUser.js";
 import WorkerProfile from "../models/workerProfile.js";
+import cloudinary from "../lib/cloudinary.js";
 import { generateVerificationCode } from "../utils/generateVerficationCode.js";
 import { generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.js";
 import { sendVerificationEmail, sendWelcomeEmail } from "../mailtrap/emails.js";
@@ -54,6 +55,7 @@ export const signupUser = asyncHandler(async (req, res) => {
     const verificationCode = generateVerificationCode();
 
     const verificationCodeHash = hashCode(verificationCode);
+    
 
     let imageUrl;
     if (image) {
@@ -135,10 +137,10 @@ export const loginUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new NotFoundError("User not found", "INVALID_CREDENTIALS");
   }
-  // const isPasswordValid = await bcrypt.compare(password, user.password);
-  // if (!isPasswordValid) {
-  //   throw new UnauthorizedError("Invalid credentials", "INVALID_CREDENTIALS");
-  // }
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    throw new UnauthorizedError("Invalid credentials", "INVALID_CREDENTIALS");
+  }
   if (!user.isVerified) {
     throw new ForbiddenError("Email not verified", "EMAIL_NOT_VERIFIED");
   }
@@ -151,12 +153,11 @@ export const loginUser = asyncHandler(async (req, res) => {
 export const verifyEmail = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   try {
-    const { verificationCode, email } = req.body;
+    const { verificationCode } = req.body;
 
     const codeHash = hashCode(verificationCode);
 
     const pendingUser = await PendingUser.findOne({
-      email,
       verificationCodeHash: codeHash,
       verificationCodeHashExpiry: { $gt: new Date() },
     });
@@ -216,7 +217,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     const safeUser = createdUser.toObject();
     safeUser.password = undefined;
 
-    await sendWelcomeEmail(safeUser.email, safeUser.fullName);
+    await sendWelcomeEmail(safeUser.email, safeUser.fullName); 
 
     return res.status(200).json({ success: true, data: safeUser, error: null });
   } finally {
