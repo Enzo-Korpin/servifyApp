@@ -13,10 +13,11 @@ const followSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-followSchema.index({ customerId: 1, workerId: 1, createdAt: -1, _id: -1 });
+followSchema.index({ customerId: 1, workerId: 1 }, { unique: true });
+followSchema.index({ customerId: 1, createdAt: -1, _id: -1 });
 
 const Follow = mongoose.model("Follow", followSchema);
 export default Follow;
