@@ -35,21 +35,18 @@ const pendingUserSchema = new mongoose.Schema(
         default: "Point",
       },
       coordinates: {
-        type: [Number], // [lng, lat]
+        type: [Number],
         required: true,
       },
     },
-
     image: {
       type: String,
     },
-
     bio: {
       type: String,
       trim: true,
       maxlength: 500,
     },
-
     yearsOfExperience: {
       type: Number,
       min: 0,
@@ -57,7 +54,6 @@ const pendingUserSchema = new mongoose.Schema(
         return this.role === "worker";
       },
     },
-
     skills: {
       type: [String],
       required: function () {
@@ -75,7 +71,6 @@ const pendingUserSchema = new mongoose.Schema(
         message: "Worker must have at least one skill",
       },
     },
-
     verificationCodeHash: {
       type: String,
     },
@@ -85,7 +80,6 @@ const pendingUserSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: { expires: 0 },
     },
     resendCount: {
       type: Number,
@@ -97,6 +91,9 @@ const pendingUserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+pendingUserSchema.index({ email: 1 }, { unique: true });
+pendingUserSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const PendingUserModel = mongoose.model("PendingUser", pendingUserSchema);
 export default PendingUserModel;

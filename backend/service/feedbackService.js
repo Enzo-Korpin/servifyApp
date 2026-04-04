@@ -15,9 +15,6 @@ import {
 
 export const submitFeedback = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
-  const safeAbort = async () => {
-    await session.abortTransaction();
-  };
 
   try {
     const { requestId } = req.params;
@@ -27,84 +24,73 @@ export const submitFeedback = asyncHandler(async (req, res) => {
     if (req.user.currentRole !== "customer") {
       throw new ForbiddenError("Must be Customer", "MUST_BE_CUSTOMER");
     }
-    session.startTransaction();
 
-    const serviceRequest =
-      await ServiceRequest.findById(requestId).session(session);
+    let responseData;
 
-    if (!serviceRequest) {
-      await safeAbort();
-      throw new NotFoundError(
-        "Service request not found",
-        "SERVICE_REQUEST_NOT_FOUND",
+    await session.withTransaction(async () => {
+      const serviceRequest =
+        await ServiceRequest.findById(requestId).session(session);
+
+      if (!serviceRequest) {
+        throw new NotFoundError(
+          "Service request not found",
+          "SERVICE_REQUEST_NOT_FOUND",
+        );
+      }
+
+      if (serviceRequest.customerId.toString() !== customerId.toString()) {
+        throw new ForbiddenError(
+          "Not allowed to submit feedback for this request",
+          "NOT_ALLOWED",
+        );
+      }
+
+      if (serviceRequest.status !== "accepted") {
+        throw new BadRequestError(
+          "Cannot submit feedback unless request is accepted",
+          "REQUEST_NOT_ACCEPTED",
+        );
+      }
+
+      const workerProfile = await WorkerProfile.findById(
+        serviceRequest.workerId,
+      ).session(session);
+
+      if (!workerProfile) {
+        throw new NotFoundError(
+          "Worker profile not found",
+          "WORKER_PROFILE_NOT_FOUND",
+        );
+      }
+
+      const [feedback] = await Feedback.create(
+        [
+          {
+            requestId: serviceRequest._id,
+            customerId: serviceRequest.customerId,
+            workerId: serviceRequest.workerId,
+            rate,
+            comment,
+          },
+        ],
+        { session },
       );
-    }
 
-    if (serviceRequest.customerId.toString() !== customerId.toString()) {
-      await safeAbort();
-      throw new ForbiddenError(
-        "Not allowed to submit feedback for this request",
-        "NOT_ALLOWED",
+      workerProfile.ratingSum += rate;
+      workerProfile.ratingCount += 1;
+      workerProfile.rate = Math.max(
+        Math.min(
+          5,
+          Math.round(
+            (workerProfile.ratingSum / workerProfile.ratingCount) * 10,
+          ) / 10,
+        ),
+        0,
       );
-    }
 
-    if (serviceRequest.status !== "accepted") {
-      await safeAbort();
-      throw new BadRequestError(
-        "Cannot submit feedback unless request is accepted",
-        "REQUEST_NOT_ACCEPTED",
-      );
-    }
+      await workerProfile.save({ session });
 
-    const feedbackDoc = await Feedback.create(
-      [
-        {
-          requestId: serviceRequest._id,
-          customerId: serviceRequest.customerId,
-          workerId: serviceRequest.workerId,
-          rate: rate,
-          comment,
-        },
-      ],
-      { session },
-    );
-
-    const feedback = feedbackDoc[0];
-    const updatedWorker = await WorkerProfile.findByIdAndUpdate(
-      serviceRequest.workerId,
-      {
-        $inc: { ratingSum: rate, ratingCount: 1 },
-      },
-      {
-        new: true,
-        session,
-      },
-    );
-    if (!updatedWorker) {
-      await safeAbort();
-      throw new NotFoundError(
-        "Worker profile not found",
-        "WORKER_PROFILE_NOT_FOUND",
-      );
-    }
-    updatedWorker.rate = Math.max(
-      Math.min(
-        5,
-        Math.round((updatedWorker.ratingSum / updatedWorker.ratingCount) * 10) /
-          10,
-      ),
-      0,
-    );
-
-    await updatedWorker.save({ session });
-
-    await serviceRequest.save({ session });
-
-    await session.commitTransaction();
-
-    return res.status(201).json({
-      sucsess: true,
-      data: {
+      responseData = {
         feedback: {
           _id: feedback._id,
           requestId: feedback.requestId,
@@ -115,13 +101,27 @@ export const submitFeedback = asyncHandler(async (req, res) => {
           createdAt: feedback.createdAt,
         },
         workerRating: {
-          avg: updatedWorker.rate,
-          count: updatedWorker.ratingCount,
+          avg: workerProfile.rate,
+          count: workerProfile.ratingCount,
         },
-      },
+      };
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: responseData,
       error: null,
     });
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new ConflictError(
+        "Feedback already submitted for this request",
+        "FEEDBACK_ALREADY_SUBMITTED",
+      );
+    }
+
+    throw error;
   } finally {
-    session.endSession();
+    await session.endSession();
   }
 });

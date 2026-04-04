@@ -14,57 +14,81 @@ import {
 export const followWorker = asyncHandler(async (req, res) => {
   const { workerId } = req.params;
   const customerId = req.user._id;
-  const worker = await User.findById(workerId);
 
-  if (!worker || worker.role !== "worker") {
-    throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
+  if (req.user.currentRole !== "customer") {
+    throw new ForbiddenError("Must be Customer", "MUST_BE_CUSTOMER");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(workerId)) {
+    throw new BadRequestError("Invalid workerId", "INVALID_WORKER_ID");
   }
 
   if (String(customerId) === String(workerId)) {
     throw new BadRequestError("Cannot follow yourself", "CANNOT_FOLLOW_SELF");
   }
 
-  const alreadyFollowing = await follow.findOne({
-    customerId: customerId,
-    workerId: workerId,
-  });
-  if (alreadyFollowing) {
-    throw new ConflictError(
-      "Already following this worker",
-      "ALREADY_FOLLOWING",
-    );
+  const workerExists = await User.exists({ _id: workerId, role: "worker" });
+  if (!workerExists) {
+    throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
   }
-  const newFollow = new follow({
-    customerId: customerId,
-    workerId: workerId,
-  });
-  await newFollow.save();
-  res.status(200).json({ success: true, data: null, error: null });
+
+  try {
+    await follow.create({
+      customerId,
+      workerId,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: null,
+      error: null,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new ConflictError(
+        "Already following this worker",
+        "ALREADY_FOLLOWING",
+      );
+    }
+
+    throw error;
+  }
 });
 
 export const unfollowWorker = asyncHandler(async (req, res) => {
   const { workerId } = req.params;
   const customerId = req.user._id;
 
-  const worker = await User.findById(workerId);
+  if (req.user.currentRole !== "customer") {
+    throw new ForbiddenError("Must be Customer", "MUST_BE_CUSTOMER");
+  }
 
-  if (!worker || worker.role !== "worker") {
+  if (!mongoose.Types.ObjectId.isValid(workerId)) {
+    throw new BadRequestError("Invalid workerId", "INVALID_WORKER_ID");
+  }
+
+  const workerExists = await User.exists({ _id: workerId, role: "worker" });
+  if (!workerExists) {
     throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
   }
 
-  const followRecord = await follow.findOne({
-    customerId: customerId,
-    workerId: workerId,
+  const deleted = await follow.deleteOne({
+    customerId,
+    workerId,
   });
-  if (!followRecord) {
+
+  if (deleted.deletedCount === 0) {
     throw new NotFoundError(
       "Not following this worker",
       "NOT_FOLLOWING_WORKER",
     );
   }
 
-  await follow.deleteOne({ customerId: customerId, workerId: workerId });
-  res.status(200).json({ success: true, data: null, error: null });
+  return res.status(200).json({
+    success: true,
+    data: null,
+    error: null,
+  });
 });
 
 export const getFollowingWorker = asyncHandler(async (req, res) => {
@@ -93,7 +117,7 @@ export const getFollowingWorker = asyncHandler(async (req, res) => {
 export const getAllFollowingWorkers = asyncHandler(async (req, res) => {
   const customerId = req.user._id;
 
-  const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+  const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
   const before = req.query.before;
 
   const query = { customerId: customerId };

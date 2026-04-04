@@ -22,7 +22,7 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
     }
 
     const { status } = req.query;
-    const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+    const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
     const after = req.query.after;
 
     const filter = { [fieldName]: userId };
@@ -66,12 +66,6 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
 export const createServiceRequest = asyncHandler(async (req, res) => {
   const customerId = req.user._id;
   const { workerId, message, addressText, lng, lat } = req.body;
-  console.log([lng, lat]);
-
-  const location = {
-    type: "Point",
-    coordinates: [Number(lng), Number(lat)],
-  };
 
   if (req.user.currentRole !== "customer") {
     throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
@@ -81,71 +75,88 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
     throw new BadRequestError("Invalid workerId", "INVALID_WORKER_ID");
   }
 
-  const existsingWorker = await User.findOne({
+  const workerExists = await User.exists({
     _id: workerId,
     role: "worker",
   });
 
-  if (!existsingWorker) {
+  if (!workerExists) {
     throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
   }
 
-  const existingRequest = await ServiceRequest.findOne({
-    customerId,
-    workerId,
-    status: "pending",
-  });
+  try {
+    const newRequest = await ServiceRequest.create({
+      customerId,
+      workerId,
+      message: (message || "").trim(),
+      addressText: (addressText || "").trim(),
+      location: {
+        type: "Point",
+        coordinates: [Number(lng), Number(lat)],
+      },
+      status: "pending",
+      chatId: null,
+    });
 
-  if (existingRequest) {
-    throw new ConflictError(
-      "You already have a pending request with this worker",
-      "ALREADY_PENDING_REQUEST",
-    );
+    return res
+      .status(201)
+      .json({ success: true, data: newRequest, error: null });
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new ConflictError(
+        "You already have a pending request with this worker",
+        "ALREADY_PENDING_REQUEST",
+      );
+    }
+
+    throw error;
   }
-
-  const newRequest = await ServiceRequest.create({
-    customerId,
-    workerId,
-    message: (message || "").trim(),
-    addressText: (addressText || "").trim(),
-    location: {
-      type: "Point",
-      coordinates: [Number(lng), Number(lat)],
-    },
-    status: "pending",
-    chatId: null,
-  });
-
-  return res.status(201).json({ success: true, data: newRequest, error: null });
 });
 
 export const cancelServiceRequest = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { cancelReason } = req.body ?? {};
-
   const { id } = req.params;
-  const request = await ServiceRequest.findById(id);
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
+  }
+
+  const request = await ServiceRequest.findOneAndUpdate(
+    {
+      _id: id,
+      customerId: userId,
+      status: "pending",
+    },
+    {
+      $set: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        ...(cancelReason ? { cancelReason: cancelReason.trim() } : {}),
+      },
+    },
+    { new: true },
+  );
 
   if (!request) {
-    throw new NotFoundError("Service request not found", "REQUEST_NOT_FOUND");
-  }
-  if (request.customerId.toString() !== userId.toString()) {
-    throw new ForbiddenError(
-      "Not authorized to cancel this request",
-      "FORBIDDEN_CANCEL_REQUEST",
-    );
-  }
-  if (request.status !== "pending") {
+    const existingRequest = await ServiceRequest.findById(id);
+
+    if (!existingRequest) {
+      throw new NotFoundError("Service request not found", "REQUEST_NOT_FOUND");
+    }
+
+    if (existingRequest.customerId.toString() !== userId.toString()) {
+      throw new ForbiddenError(
+        "Not authorized to cancel this request",
+        "FORBIDDEN_CANCEL_REQUEST",
+      );
+    }
+
     throw new BadRequestError(
       "Only pending requests can be cancelled",
       "INVALID_CANCEL_STATUS",
     );
   }
-  request.status = "cancelled";
-  request.cancelledAt = new Date();
-  cancelReason ? (request.cancelReason = cancelReason.trim()) : null;
-
-  await request.save();
 
   return res.status(200).json({ success: true, data: request, error: null });
 });
@@ -154,49 +165,85 @@ export const acceptServiceRequest = asyncHandler(async (req, res) => {
   if (req.user.currentRole !== "worker") {
     throw new ForbiddenError("Must be Worker", "ROLE_FORBIDDEN");
   }
+
   const requestId = req.params.id;
+
   if (!mongoose.Types.ObjectId.isValid(requestId)) {
     throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
   }
 
-  const request = await ServiceRequest.findById(requestId);
-  if (!request)
-    throw new NotFoundError("Service request not found", "REQUEST_NOT_FOUND");
+  const session = await mongoose.startSession();
 
-  if (request.workerId.toString() !== req.user._id.toString()) {
-    throw new ForbiddenError(
-      "Not authorized to accept this request",
-      "FORBIDDEN_ACCEPT_REQUEST",
-    );
-  }
+  try {
+    let updatedRequest;
 
-  if (request.status !== "pending") {
-    throw new BadRequestError(
-      `Cannot accept request with status '${request.status}'`,
-      "INVALID_ACCEPT_STATUS",
-    );
-  }
+    await session.withTransaction(async () => {
+      const request = await ServiceRequest.findById(requestId).session(session);
 
-  let chat = await Chat.findOne({
-    customerId: request.customerId,
-    workerId: request.workerId,
-  });
+      if (!request) {
+        throw new NotFoundError(
+          "Service request not found",
+          "REQUEST_NOT_FOUND",
+        );
+      }
 
-  if (!chat) {
-    chat = await Chat.create({
-      customerId: request.customerId,
-      workerId: request.workerId,
-      createdFromRequestId: request._id,
+      if (request.workerId.toString() !== req.user._id.toString()) {
+        throw new ForbiddenError(
+          "Not authorized to accept this request",
+          "FORBIDDEN_ACCEPT_REQUEST",
+        );
+      }
+
+      if (request.status !== "pending") {
+        throw new BadRequestError(
+          `Cannot accept request with status '${request.status}'`,
+          "INVALID_ACCEPT_STATUS",
+        );
+      }
+
+      let chat = await Chat.findOne({
+        customerId: request.customerId,
+        workerId: request.workerId,
+      }).session(session);
+
+      if (!chat) {
+        try {
+          chat = await Chat.create(
+            [
+              {
+                customerId: request.customerId,
+                workerId: request.workerId,
+                createdFromRequestId: request._id,
+              },
+            ],
+            { session },
+          ).then((docs) => docs[0]);
+        } catch (error) {
+          if (error?.code === 11000) {
+            chat = await Chat.findOne({
+              customerId: request.customerId,
+              workerId: request.workerId,
+            }).session(session);
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      request.status = "accepted";
+      request.acceptedAt = new Date();
+      request.chatId = chat._id;
+
+      await request.save({ session });
+      updatedRequest = request;
     });
+
+    return res
+      .status(200)
+      .json({ success: true, data: updatedRequest, error: null });
+  } finally {
+    await session.endSession();
   }
-
-  request.status = "accepted";
-  request.acceptedAt = new Date();
-  request.chatId = chat._id;
-
-  await request.save();
-
-  return res.status(200).json({ success: true, data: request, error: null });
 });
 
 export const rejectServiceRequest = asyncHandler(async (req, res) => {
@@ -211,29 +258,41 @@ export const rejectServiceRequest = asyncHandler(async (req, res) => {
     throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
   }
 
-  const request = await ServiceRequest.findById(requestId);
-  if (!request)
-    throw new NotFoundError("Service request not found", "REQUEST_NOT_FOUND");
+  const request = await ServiceRequest.findOneAndUpdate(
+    {
+      _id: requestId,
+      workerId: req.user._id,
+      status: "pending",
+    },
+    {
+      $set: {
+        status: "rejected",
+        rejectedAt: new Date(),
+        rejectReason: rejectReason ? rejectReason.trim() : null,
+      },
+    },
+    { new: true },
+  );
 
-  if (request.workerId.toString() !== req.user._id.toString()) {
-    throw new ForbiddenError(
-      "Not authorized to reject this request",
-      "FORBIDDEN_REJECT_REQUEST",
-    );
-  }
+  if (!request) {
+    const existingRequest = await ServiceRequest.findById(requestId);
 
-  if (request.status !== "pending") {
+    if (!existingRequest) {
+      throw new NotFoundError("Service request not found", "REQUEST_NOT_FOUND");
+    }
+
+    if (existingRequest.workerId.toString() !== req.user._id.toString()) {
+      throw new ForbiddenError(
+        "Not authorized to reject this request",
+        "FORBIDDEN_REJECT_REQUEST",
+      );
+    }
+
     throw new BadRequestError(
-      `Cannot reject request with status '${request.status}'`,
+      `Cannot reject request in its current state`,
       "INVALID_REJECT_STATUS",
     );
   }
-
-  request.status = "rejected";
-  request.rejectedAt = new Date();
-  request.rejectReason = rejectReason ? rejectReason.trim() : null;
-
-  await request.save();
 
   return res.status(200).json({ success: true, data: request, error: null });
 });

@@ -17,7 +17,7 @@ export const updateCustomerProfile = asyncHandler(async (req, res) => { });
 export const getFilteredWorkers = asyncHandler(async (req, res) => {
   const { skill, radiusKm = 5, sort = "distance", lat, lng } = req.validateQuery;
 
-  const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+  const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
   const after = req.query.after;
 
   let customerLat;
@@ -236,11 +236,11 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
 
 export const searchWorkersByName = asyncHandler(async (req, res) => {
   const { search } = req.validateQuery;
-  const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+  const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
   const after = req.query.after;
 
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(escaped, "i");
+  const regex = new RegExp(`^${escaped}`, "i");
 
   const query = {
     role: "worker",

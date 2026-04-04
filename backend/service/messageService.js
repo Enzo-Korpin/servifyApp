@@ -20,9 +20,12 @@ export const getUsersForSidebar = asyncHandler(async (req, res) => {
 
   const chats = await Chat.find({
     $or: [{ customerId: myId }, { workerId: myId }],
-  });
+  })
+    .select("customerId workerId updatedAt")
+    .sort({ updatedAt: -1 })
+    .lean();
 
-  if (!chats) {
+  if (chats.length === 0) {
     return res.status(200).json({ success: true, data: [], error: null });
   }
 
@@ -67,7 +70,7 @@ export const getMessages = asyncHandler(async (req, res) => {
     throw new BadRequestError("Invalid user ID", "INVALID_USER_ID");
   }
 
-  const limit = Math.min(parseInt(req.query.limit || "20", 10), 10);
+  const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
   const before = req.query.before;
 
   const query = {
@@ -104,7 +107,8 @@ export const getMessages = asyncHandler(async (req, res) => {
 
   const docs = await Message.find(query)
     .sort({ createdAt: -1, _id: -1 })
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   const messages = docs.reverse();
 
@@ -173,7 +177,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     senderId,
     receiverId,
     text: text ?? null,
-    image: imageUrl ?? null,
+    imageURL: imageUrl ?? null,
   });
 
   await Chat.updateOne({ _id: chat._id }, { $set: { updatedAt: new Date() } });

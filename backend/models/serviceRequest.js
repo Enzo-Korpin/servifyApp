@@ -62,15 +62,14 @@ const serviceRequestSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-serviceRequestSchema.index({ location: "2dsphere" });
+// serviceRequestSchema.index({ location: "2dsphere" });  // leave it later when we implement location-based search on worker's Requestes page
 
-serviceRequestSchema.index({
-  customerId: 1,
-  status: 1,
-  createdAt: -1,
-  _id: -1,
-});
-serviceRequestSchema.index({ workerId: 1, status: 1, createdAt: -1, _id: -1 });
+serviceRequestSchema.index({ customerId: 1, createdAt: -1, _id: -1 });
+serviceRequestSchema.index({ workerId: 1, createdAt: -1, _id: -1 });
+serviceRequestSchema.index({ workerId: 1, status: 1 });
 
-serviceRequestSchema.index({ status: 1, expiresAt: 1 });
+serviceRequestSchema.index(
+  { customerId: 1, workerId: 1 },
+  { unique: true, partialFilterExpression: { status: "pending" } },
+);
 export default mongoose.model("ServiceRequest", serviceRequestSchema);

@@ -18,9 +18,11 @@ const chatSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 chatSchema.index({ customerId: 1, workerId: 1 }, { unique: true });
+chatSchema.index({ customerId: 1, updatedAt: -1 });
+chatSchema.index({ workerId: 1, updatedAt: -1 });
 
 const Chat = mongoose.model("Chat", chatSchema);
 export default Chat;
