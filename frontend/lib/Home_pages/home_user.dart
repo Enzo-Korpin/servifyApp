@@ -17,7 +17,8 @@ class WorkerMapPage extends StatefulWidget {
   State<WorkerMapPage> createState() => _WorkerMapPageState();
 }
 
-class _WorkerMapPageState extends State<WorkerMapPage> {
+class _WorkerMapPageState extends State<WorkerMapPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
 
@@ -31,12 +32,17 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
   double? _userLat;
   double? _userLng;
 
-  String? _selectedSkill; // null = all
-  String _activeSort = 'distance'; // distance | rating
+  String? _selectedSkill;
+  String _activeSort = 'distance';
   bool _distanceAscending = true;
   bool _ratingDescending = true;
 
   List<Map<String, dynamic>> _allWorkers = [];
+
+  // Animation
+  late AnimationController _animController;
+  final List<Animation<Offset>> _slideAnimations = [];
+  final List<Animation<double>> _fadeAnimations = [];
 
   static const LatLng _fallbackLocation = LatLng(31.9539, 35.9106);
 
@@ -76,6 +82,10 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _searchController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -84,8 +94,46 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
 
   @override
   void dispose() {
+    _animController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _buildAnimations(int count) {
+    _slideAnimations.clear();
+    _fadeAnimations.clear();
+
+    for (int i = 0; i < count; i++) {
+      final start = (i * 0.12).clamp(0.0, 0.85);
+      final end = (start + 0.45).clamp(0.0, 1.0);
+
+      _slideAnimations.add(
+        Tween<Offset>(
+          begin: const Offset(-0.4, 0),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+
+      _fadeAnimations.add(
+        Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _triggerAnimation(int count) {
+    _buildAnimations(count);
+    _animController.reset();
+    _animController.forward();
   }
 
   Future<void> _loadInitialData() async {
@@ -120,7 +168,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
       );
 
       final data = response.data;
-      final coords = (data["data"]?["location"]?["coordinates"] ?? []) as List;
+      final coords =
+          (data["data"]?["location"]?["coordinates"] ?? []) as List;
 
       if (coords.length != 2) {
         _showMessage("User location not found");
@@ -138,13 +187,13 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
       });
 
       if (_useMap) {
-        final currentZoom =
-            _mapController.camera.zoom == 0 ? 13.0 : _mapController.camera.zoom;
+        final currentZoom = _mapController.camera.zoom == 0
+            ? 13.0
+            : _mapController.camera.zoom;
         _mapController.move(LatLng(lat, lng), currentZoom);
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
+      final message = e.response?.data?["message"]?.toString() ??
           e.response?.data?["error"]?.toString() ??
           "Failed to load user location";
       _showMessage(message);
@@ -228,11 +277,9 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
       }
 
       await _fetchWorkers();
-
       _showMessage("Showing workers near your current location");
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
+      final message = e.response?.data?["message"]?.toString() ??
           e.response?.data?["error"]?.toString() ??
           "Failed to get location";
       _showMessage(message);
@@ -284,8 +331,10 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
       final List rawWorkers = (data["data"]?["workers"] ?? []) as List;
 
       _allWorkers = rawWorkers.map<Map<String, dynamic>>((worker) {
-        final profile = Map<String, dynamic>.from(worker["workerProfile"] ?? {});
-        final location = Map<String, dynamic>.from(worker["location"] ?? {});
+        final profile =
+            Map<String, dynamic>.from(worker["workerProfile"] ?? {});
+        final location =
+            Map<String, dynamic>.from(worker["location"] ?? {});
         final coords = (location["coordinates"] ?? [0.0, 0.0]) as List;
 
         final double lng =
@@ -304,7 +353,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
           "ratingCount":
               profile["ratingCount"] ?? profile["numberOfRatings"] ?? 0,
           "distanceMeters": (worker["distanceMeters"] ?? 0) as num,
-          "distanceValue": ((worker["distanceMeters"] ?? 0) as num) / 1000,
+          "distanceValue":
+              ((worker["distanceMeters"] ?? 0) as num) / 1000,
           "distance":
               "${(((worker["distanceMeters"] ?? 0) as num) / 1000).toStringAsFixed(1)} km",
           "lat": lat,
@@ -315,12 +365,14 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
 
       _applyLocalSort();
 
+      // Trigger animation after workers load
+      _triggerAnimation(_allWorkers.length);
+
       if (mounted) {
         setState(() {});
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
+      final message = e.response?.data?["message"]?.toString() ??
           e.response?.data?["error"]?.toString() ??
           "Failed to load workers";
       _showMessage(message);
@@ -339,7 +391,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
     final normalized = skills.map((e) => e.toLowerCase().trim()).toList();
 
     if (normalized.contains('plumbing')) return 'Plumber';
-    if (normalized.contains('electricity') || normalized.contains('electrical')) {
+    if (normalized.contains('electricity') ||
+        normalized.contains('electrical')) {
       return 'Electrician';
     }
     if (normalized.contains('painting')) return 'Painter';
@@ -352,13 +405,14 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
   void _applyLocalSort() {
     if (_activeSort == 'distance') {
       _allWorkers.sort((a, b) {
-        final cmp =
-            (a["distanceValue"] as num).compareTo(b["distanceValue"] as num);
+        final cmp = (a["distanceValue"] as num)
+            .compareTo(b["distanceValue"] as num);
         return _distanceAscending ? cmp : -cmp;
       });
     } else if (_activeSort == 'rating') {
       _allWorkers.sort((a, b) {
-        final cmp = (b["rating"] as num).compareTo(a["rating"] as num);
+        final cmp =
+            (b["rating"] as num).compareTo(a["rating"] as num);
         return _ratingDescending ? cmp : -cmp;
       });
     }
@@ -450,7 +504,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                 child: _userPin(),
               ),
               ...visibleWorkers
-                  .where((worker) => worker["lat"] != 0 && worker["lng"] != 0)
+                  .where(
+                      (worker) => worker["lat"] != 0 && worker["lng"] != 0)
                   .map(
                     (worker) => Marker(
                       point: LatLng(
@@ -525,8 +580,9 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
           builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
-                color: Color(0xFFF5F7FA),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+                color: Color(0xFFF2F7FF),
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(22)),
               ),
               child: Column(
                 children: [
@@ -543,16 +599,19 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                   SizedBox(
                     height: 44,
                     child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
                       itemBuilder: (_, i) => _chip(categories[i]),
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(width: 10),
                       itemCount: categories.length,
                     ),
                   ),
                   const SizedBox(height: 12),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
                         Expanded(
@@ -576,7 +635,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
                               children: [
                                 const Text("Rating"),
                                 if (_activeSort == 'rating') ...[
@@ -597,12 +657,14 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                           child: ElevatedButton(
                             onPressed: _onSortDistance,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _activeSort == 'distance'
-                                  ? const Color(0xFFEBF5FF)
-                                  : Colors.white,
-                              foregroundColor: _activeSort == 'distance'
-                                  ? const Color(0xFF2563EB)
-                                  : Colors.black87,
+                              backgroundColor:
+                                  _activeSort == 'distance'
+                                      ? const Color(0xFFEBF5FF)
+                                      : Colors.white,
+                              foregroundColor:
+                                  _activeSort == 'distance'
+                                      ? const Color(0xFF2563EB)
+                                      : Colors.black87,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -614,7 +676,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
                               children: [
                                 const Text("Distance"),
                                 if (_activeSort == 'distance') ...[
@@ -644,14 +707,33 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
                                   style: TextStyle(fontSize: 16),
                                 ),
                               )
-                            : ListView.separated(
-                                controller: scrollController,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                itemBuilder: (_, i) =>
-                                    WorkerCard(worker: visibleWorkers[i]),
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 12),
-                                itemCount: visibleWorkers.length,
+                            : AnimatedBuilder(
+                                animation: _animController,
+                                builder: (context, _) {
+                                  return ListView.separated(
+                                    controller: scrollController,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    itemCount: visibleWorkers.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 12),
+                                    itemBuilder: (_, i) {
+                                      // Safety check
+                                      if (i >= _slideAnimations.length) {
+                                        return WorkerCard(
+                                            worker: visibleWorkers[i]);
+                                      }
+                                      return FadeTransition(
+                                        opacity: _fadeAnimations[i],
+                                        child: SlideTransition(
+                                          position: _slideAnimations[i],
+                                          child: WorkerCard(
+                                              worker: visibleWorkers[i]),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               ),
                   ),
                 ],
@@ -815,7 +897,8 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
           ),
         ],
       ),
-      child: const Icon(Icons.person_pin_circle, color: Colors.white, size: 22),
+      child: const Icon(Icons.person_pin_circle,
+          color: Colors.white, size: 22),
     );
   }
 
@@ -902,12 +985,17 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
     return InkWell(
       onTap: () => _onCategoryTap(category),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEBF5FF) : Colors.white,
+          color: selected
+              ? const Color(0xFF3366CC)
+              : const Color(0xFFEAF2FF),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: selected ? const Color(0xFF2563EB) : Colors.black12,
+            color: selected
+                ? const Color(0xFF2563EB)
+                : Colors.black12,
           ),
         ),
         child: Row(
@@ -916,7 +1004,9 @@ class _WorkerMapPageState extends State<WorkerMapPage> {
               category.key,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: selected ? const Color(0xFF2563EB) : Colors.black87,
+                color: selected
+                    ? const Color.fromARGB(255, 255, 255, 255)
+                    : Colors.black87,
               ),
             ),
             const SizedBox(width: 6),

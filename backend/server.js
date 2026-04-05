@@ -1,5 +1,5 @@
 import express, { request } from "express";
-// import dotenv from "dotenv";
+ import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes.js";
@@ -15,7 +15,7 @@ import { RouteNotFound } from "./middleware/routeNoteFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
-// dotenv.config();
+dotenv.config();
 app.use(cors({
   origin: true,
   credentials: true,

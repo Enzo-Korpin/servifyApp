@@ -127,12 +127,86 @@ class Car_provider extends StatelessWidget {
             ),
           ),
 
+          // Pulsing green dot
+          const _PulsingDot(),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _opacityAnim;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+
+    _scaleAnim = Tween<double>(begin: 1.0, end: 2.2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _opacityAnim = Tween<double>(begin: 0.6, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Pulsing ring
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _scaleAnim.value,
+                child: Opacity(
+                  opacity: _opacityAnim.value,
+                  child: Container(
+                    width: 11,
+                    height: 11,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF34C759),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          // Solid dot on top
           Container(
             width: 11,
             height: 11,
             decoration: const BoxDecoration(
-              shape: BoxShape.circle,
               color: Color(0xFF34C759),
+              shape: BoxShape.circle,
             ),
           ),
         ],

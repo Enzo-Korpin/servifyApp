@@ -12,8 +12,10 @@ class HomeWorker extends StatefulWidget {
   State<HomeWorker> createState() => _HomeWorkerState();
 }
 
-class _HomeWorkerState extends State<HomeWorker> {
-  final AssetImage backgroundImage = const AssetImage("assets/emptypicture.png");
+class _HomeWorkerState extends State<HomeWorker> with TickerProviderStateMixin {
+  final AssetImage backgroundImage = const AssetImage(
+    "assets/emptypicture.png",
+  );
   CurrentUserModel? _currentUser;
 
   late final WorkerRequestService _service;
@@ -23,93 +25,238 @@ class _HomeWorkerState extends State<HomeWorker> {
   bool _isActionLoading = false;
 
   String? _error;
-
   String _selectedStatus = "pending";
 
   List<ServiceRequestModel> _requests = [];
-  Map<String, int> _stats = {
-    "pending": 0,
-    "accepted": 0,
-    "rejected": 0,
-  };
+  Map<String, int> _stats = {"pending": 0, "accepted": 0, "rejected": 0};
 
   final List<String> _statuses = ["pending", "accepted", "rejected"];
+
+  // ── Cards slide animation ──
+  late AnimationController _animController;
+  final List<Animation<Offset>> _slideAnimations = [];
+  final List<Animation<double>> _fadeAnimations = [];
+
+  // ── Refresh spin animation ──
+  late AnimationController _refreshSpinController;
+
+  // ── Waving hand animation ──
+  late AnimationController _waveController;
+  late Animation<double> _waveRotation;
+  late Animation<double> _waveFade;
 
   @override
   void initState() {
     super.initState();
     _service = WorkerRequestService();
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _refreshSpinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    );
+
+    // Rocks like a real waving hand
+    _waveRotation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.0,
+          end: 0.5,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 15,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.5,
+          end: -0.3,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: -0.3,
+          end: 0.5,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.5,
+          end: -0.3,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: -0.3,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 25,
+      ),
+    ]).animate(_waveController);
+
+    // Stays visible then fades out beautifully at the end
+    _waveFade = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 70),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.0,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+    ]).animate(_waveController);
+
     _loadInitialData();
   }
 
-      Future<void> _loadInitialData() async {
-        setState(() {
-          _isInitialLoading = true;
-          _error = null;
-        });
+  @override
+  void dispose() {
+    _animController.dispose();
+    _refreshSpinController.dispose();
+    _waveController.dispose();
+    super.dispose();
+  }
 
-        try {
-          final results = await Future.wait([
-            _service.getCurrentUser(),
-            _service.getWorkerStats(),
-            _service.getWorkerRequests(status: _selectedStatus),
-          ]);
+  void _buildAnimations(int count) {
+    _slideAnimations.clear();
+    _fadeAnimations.clear();
 
-          setState(() {
-            _currentUser = results[0] as CurrentUserModel;
-            _stats = results[1] as Map<String, int>;
-            _requests = results[2] as List<ServiceRequestModel>;
-          });
-        } catch (e) {
-          setState(() {
-            _error = e.toString();
-          });
-        } finally {
-          if (mounted) {
-            setState(() {
-              _isInitialLoading = false;
-            });
-          }
-        }
-      }
+    for (int i = 0; i < count; i++) {
+      final start = (i * 0.12).clamp(0.0, 0.85);
+      final end = (start + 0.45).clamp(0.0, 1.0);
 
-    Future<void> _changeStatus(String status) async {
-      if (_selectedStatus == status || _isTabLoading) return;
+      _slideAnimations.add(
+        Tween<Offset>(begin: const Offset(-0.4, 0), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+
+      _fadeAnimations.add(
+        Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _triggerAnimation(int count) {
+    _buildAnimations(count);
+    _animController.reset();
+    _animController.forward();
+  }
+
+  void _triggerRefreshSpin() {
+    _refreshSpinController.reset();
+    _refreshSpinController.repeat();
+  }
+
+  void _stopRefreshSpin() {
+    _refreshSpinController.stop();
+    _refreshSpinController.forward(from: _refreshSpinController.value).then((
+      _,
+    ) {
+      _refreshSpinController.reset();
+    });
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _isInitialLoading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _service.getCurrentUser(),
+        _service.getWorkerStats(),
+        _service.getWorkerRequests(status: _selectedStatus),
+      ]);
 
       setState(() {
-        _selectedStatus = status;
-        _isTabLoading = true;
-        _error = null;
+        _currentUser = results[0] as CurrentUserModel;
+        _stats = results[1] as Map<String, int>;
+        _requests = results[2] as List<ServiceRequestModel>;
       });
 
-      try {
-        final requests = await _service.getWorkerRequests(status: status);
+      _triggerAnimation(_requests.length);
 
-        if (!mounted) return;
-
-        setState(() {
-          _requests = requests;
-        });
-      } catch (e) {
-        if (!mounted) return;
-
-        setState(() {
-          _error = e.toString();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to load $status requests: $e")),
-        );
-      } finally {
+      // Play wave after a short delay once page is ready
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
-          setState(() {
-            _isTabLoading = false;
-          });
+          _waveController.reset();
+          _waveController.forward();
         }
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+        });
       }
     }
+  }
+
+  Future<void> _changeStatus(String status) async {
+    if (_selectedStatus == status || _isTabLoading) return;
+
+    setState(() {
+      _selectedStatus = status;
+      _isTabLoading = true;
+      _error = null;
+    });
+
+    try {
+      final requests = await _service.getWorkerRequests(status: status);
+
+      if (!mounted) return;
+
+      setState(() {
+        _requests = requests;
+      });
+
+      _triggerAnimation(_requests.length);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load $status requests: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTabLoading = false;
+        });
+      }
+    }
+  }
 
   Future<void> _refreshCurrentTab() async {
+    _triggerRefreshSpin();
+
     try {
       final results = await Future.wait([
         _service.getWorkerStats(),
@@ -122,19 +269,21 @@ class _HomeWorkerState extends State<HomeWorker> {
         _stats = results[0] as Map<String, int>;
         _requests = results[1] as List<ServiceRequestModel>;
       });
+
+      _triggerAnimation(_requests.length);
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Refresh failed: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Refresh failed: $e")));
+    } finally {
+      if (mounted) _stopRefreshSpin();
     }
   }
 
   Future<void> _acceptRequest(String requestId) async {
-    setState(() {
-      _isActionLoading = true;
-    });
+    setState(() => _isActionLoading = true);
 
     try {
       await _service.acceptRequest(requestId);
@@ -146,15 +295,11 @@ class _HomeWorkerState extends State<HomeWorker> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Accept failed: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Accept failed: $e")));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isActionLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -190,9 +335,7 @@ class _HomeWorkerState extends State<HomeWorker> {
 
     if (reason == null) return;
 
-    setState(() {
-      _isActionLoading = true;
-    });
+    setState(() => _isActionLoading = true);
 
     try {
       await _service.rejectRequest(requestId, rejectReason: reason);
@@ -204,15 +347,11 @@ class _HomeWorkerState extends State<HomeWorker> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Reject failed: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Reject failed: $e")));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isActionLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -281,13 +420,13 @@ class _HomeWorkerState extends State<HomeWorker> {
   }
 
   Widget _buildContent() {
-      if (_isInitialLoading) {
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 80),
-            child: CircularProgressIndicator(),
-          ),
-        );
+    if (_isInitialLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 80),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
     if (_error != null) {
@@ -304,10 +443,7 @@ class _HomeWorkerState extends State<HomeWorker> {
                 ),
               ),
               const SizedBox(height: 10),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-              ),
+              Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadInitialData,
@@ -331,19 +467,45 @@ class _HomeWorkerState extends State<HomeWorker> {
                 onTap: () {},
                 child: CircleAvatar(
                   radius: 30,
-                  backgroundImage: (_currentUser?.image != null &&
+                  backgroundImage:
+                      (_currentUser?.image != null &&
                           _currentUser!.image!.isNotEmpty)
                       ? NetworkImage(_currentUser!.image!)
-                      : const AssetImage("assets/emptypicture.png") as ImageProvider,
+                      : const AssetImage("assets/emptypicture.png")
+                            as ImageProvider,
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                "Welcome, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : "Worker"}",
-                style: GoogleFonts.instrumentSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+
+              // ── Name + waving hand ──
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Welcome, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : "Worker"}",
+                    style: GoogleFonts.instrumentSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedBuilder(
+                    animation: _waveController,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _waveFade.value,
+                        child: Transform.rotate(
+                          angle: _waveRotation.value,
+                          alignment: Alignment.bottomCenter,
+                          child: const Text(
+                            "👋",
+                            style: TextStyle(fontSize: 22),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -381,9 +543,12 @@ class _HomeWorkerState extends State<HomeWorker> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            IconButton(
-              onPressed: _refreshCurrentTab,
-              icon: const Icon(Icons.refresh),
+            RotationTransition(
+              turns: _refreshSpinController,
+              child: IconButton(
+                onPressed: _refreshCurrentTab,
+                icon: const Icon(Icons.refresh),
+              ),
             ),
           ],
         ),
@@ -404,24 +569,44 @@ class _HomeWorkerState extends State<HomeWorker> {
             ),
           )
         else
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: Column(
-            key: ValueKey(_selectedStatus),
-            children: _requests.map<Widget>((request) {
-              return WorkerOrderCard(
-                request: request,
-                isUpdating: _isActionLoading,
-                onAccept: request.status == "pending"
-                    ? () => _acceptRequest(request.id)
-                    : null,
-                onReject: request.status == "pending"
-                    ? () => _rejectRequest(request.id)
-                    : null,
+          AnimatedBuilder(
+            animation: _animController,
+            builder: (context, _) {
+              return Column(
+                key: ValueKey(_selectedStatus),
+                children: List.generate(_requests.length, (i) {
+                  if (i >= _slideAnimations.length) {
+                    return WorkerOrderCard(
+                      request: _requests[i],
+                      isUpdating: _isActionLoading,
+                      onAccept: _requests[i].status == "pending"
+                          ? () => _acceptRequest(_requests[i].id)
+                          : null,
+                      onReject: _requests[i].status == "pending"
+                          ? () => _rejectRequest(_requests[i].id)
+                          : null,
+                    );
+                  }
+                  return FadeTransition(
+                    opacity: _fadeAnimations[i],
+                    child: SlideTransition(
+                      position: _slideAnimations[i],
+                      child: WorkerOrderCard(
+                        request: _requests[i],
+                        isUpdating: _isActionLoading,
+                        onAccept: _requests[i].status == "pending"
+                            ? () => _acceptRequest(_requests[i].id)
+                            : null,
+                        onReject: _requests[i].status == "pending"
+                            ? () => _rejectRequest(_requests[i].id)
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
               );
-            }).toList(),
+            },
           ),
-        ),
       ],
     );
   }
@@ -429,15 +614,31 @@ class _HomeWorkerState extends State<HomeWorker> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshCurrentTab,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-              child: _buildContent(),
+      backgroundColor: const Color(0xFFFAFBFF),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFFDCEAFD), // light blue top
+              Color(0xFFF5F7FA), // your current color bottom
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.4], // gradient only affects top portion
+          ),
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _refreshCurrentTab,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 40,
+                  horizontal: 20,
+                ),
+                child: _buildContent(),
+              ),
             ),
           ),
         ),

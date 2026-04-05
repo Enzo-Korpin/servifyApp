@@ -179,18 +179,9 @@ class _SignupUserState extends State<SignupUser> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEEEEEE),
+      backgroundColor: const Color(0xFFEAF7FF),
       appBar: AppBar(
-        centerTitle: true,
-        title: Text(
-          'User Registration',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Colors.black,
-          ),
-        ),
-        backgroundColor: const Color(0xFF1EBBF0),
+        backgroundColor: const Color(0xFFEAF7FF),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
@@ -199,7 +190,7 @@ class _SignupUserState extends State<SignupUser> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 20),
+          padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
           child: Column(
             children: [
               Center(

@@ -227,19 +227,9 @@ class _StartUserState extends State<StartUser> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEEEEEE),
+      backgroundColor: const Color(0xFFEAF7FF),
       appBar: AppBar(
-        centerTitle: true,
-        title: Text(
-          'Worker Registration',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Colors.black,
-          ),
-        ),
-        backgroundColor: const Color(0xFF1EBBF0),
+        backgroundColor: const Color(0xFFEAF7FF),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),

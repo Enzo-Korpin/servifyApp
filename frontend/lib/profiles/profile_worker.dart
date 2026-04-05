@@ -13,7 +13,8 @@ class ProfileWorker extends StatefulWidget {
   State<ProfileWorker> createState() => _ProfileWorkerState();
 }
 
-class _ProfileWorkerState extends State<ProfileWorker> {
+class _ProfileWorkerState extends State<ProfileWorker>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   String? _error;
 
@@ -25,10 +26,60 @@ class _ProfileWorkerState extends State<ProfileWorker> {
   int ratingCount = 0;
   List<String> skills = [];
 
+  // Animation for chat icon
+  late AnimationController _chatIconController;
+  late Animation<double> _chatIconScale;
+  late Animation<double> _chatIconRotate;
+
   @override
   void initState() {
     super.initState();
+
+    _chatIconController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+
+    // Scale: pops in from 0 → 1.2 → 1.0
+    _chatIconScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 1.2)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 60,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.2, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 40,
+      ),
+    ]).animate(_chatIconController);
+
+    // Slight wiggle rotation: 0 → -0.15 → 0.15 → 0
+    _chatIconRotate = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: -0.15)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -0.15, end: 0.15)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.15, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 25,
+      ),
+    ]).animate(_chatIconController);
+
     _loadWorker();
+  }
+
+  @override
+  void dispose() {
+    _chatIconController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadWorker() async {
@@ -60,6 +111,11 @@ class _ProfileWorkerState extends State<ProfileWorker> {
         ratingCount = (data["ratingCount"] ?? 0) as int;
         skills = List<String>.from(data["skills"] ?? []);
         _isLoading = false;
+      });
+
+      // Play chat icon animation once after data loads
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _chatIconController.forward();
       });
     } on DioException catch (e) {
       final message =
@@ -118,13 +174,72 @@ class _ProfileWorkerState extends State<ProfileWorker> {
       );
     }
 
-    return const CircleAvatar(
+    // Person icon instead of chat icon
+    return CircleAvatar(
       radius: 65,
-      backgroundColor: Colors.grey,
-      child: Icon(
+      backgroundColor: Colors.grey.shade400,
+      child: const Icon(
         Icons.person,
-        size: 60,
         color: Colors.white,
+        size: 60,
+      ),
+    );
+  }
+
+  Widget _buildChatButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: ElevatedButton(
+        onPressed: () {},
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2ECC71),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          elevation: 3,
+          shadowColor: const Color(0xFF2ECC71).withOpacity(0.4),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Animated chat icon
+            AnimatedBuilder(
+              animation: _chatIconController,
+              builder: (context, child) {
+                return Transform.rotate(
+                  angle: _chatIconRotate.value,
+                  child: Transform.scale(
+                    scale: _chatIconScale.value,
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.chat_bubble_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              "Chat",
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -137,7 +252,12 @@ class _ProfileWorkerState extends State<ProfileWorker> {
     if (_error != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(
+            top: 5,
+            right: 24,
+            left: 24,
+            bottom: 12,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -201,36 +321,8 @@ class _ProfileWorkerState extends State<ProfileWorker> {
             ),
             const SizedBox(height: 20),
 
-            SizedBox(
-              width: double.infinity,
-              child: SizedBox(
-                height: 60,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD9D9D9),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.chat_bubble_outline, color: Colors.black),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Chat",
-                        style: GoogleFonts.inriaSans(
-                          color: Colors.black,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            // Improved chat button with animated icon
+            _buildChatButton(),
 
             const SizedBox(height: 40),
             const Divider(),
@@ -267,7 +359,9 @@ class _ProfileWorkerState extends State<ProfileWorker> {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        skills.isEmpty ? "No skills" : skills.length.toString(),
+                        skills.isEmpty
+                            ? "No skills"
+                            : skills.length.toString(),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -308,7 +402,8 @@ class _ProfileWorkerState extends State<ProfileWorker> {
               children: [
                 const Text(
                   "Customer Reviews",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -318,9 +413,7 @@ class _ProfileWorkerState extends State<ProfileWorker> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Row(
-                  children: _buildStars(rate),
-                ),
+                Row(children: _buildStars(rate)),
                 const SizedBox(height: 5),
                 Text(
                   "($ratingCount reviews)",
@@ -331,6 +424,7 @@ class _ProfileWorkerState extends State<ProfileWorker> {
 
             const SizedBox(height: 25),
 
+            // Request Service button — same color as before
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -364,6 +458,8 @@ class _ProfileWorkerState extends State<ProfileWorker> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -376,20 +472,11 @@ class _ProfileWorkerState extends State<ProfileWorker> {
       backgroundColor: const Color(0xFFF0F0F0),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF0F0F0),
-        elevation: 0,
-        title: const Text(
-          "Worker Profile",
-          style: TextStyle(color: Colors.black),
-        ),
-        centerTitle: true,
         leading: IconButton(
           onPressed: () {
             Navigator.pop(context);
           },
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
         ),
       ),
       body: _buildBody(),

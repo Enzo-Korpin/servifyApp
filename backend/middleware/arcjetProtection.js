@@ -1,6 +1,6 @@
 import { aj } from "../lib/arcjet.js";
-// import dotenv from "dotenv";
-// dotenv.config();
+ import dotenv from "dotenv";
+ dotenv.config();
 
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { ForbiddenError, PayloadTooLargeError } from "../errors/httpErrors.js";

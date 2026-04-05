@@ -1,5 +1,5 @@
-// import dotenv from "dotenv";
-// dotenv.config();
+ import dotenv from "dotenv";
+ dotenv.config();
 
 const DAILY_LIMIT = Number(process.env.EMAIL_DAILY_LIMIT || 50);
 const PER_RECIPIENT_DAILY_LIMIT = Number(
