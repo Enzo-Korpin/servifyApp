@@ -1,9 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/service_request_model.dart';
 import '../models/current_user_model.dart';
+import '../models/service_request_model.dart';
 import '../services/worker_request_service.dart';
+import '../services/account_switch_service.dart';
 import '../requests/Widgets/worker_order_card.dart';
+import '../Access/login_screens/Login_Screen.dart';
+import 'package:dio/dio.dart';
+import 'package:frontend/worker/worker_profile_screen.dart';
+
+
+class _StatusState {
+  static const Object _unset = Object();
+
+  final List<ServiceRequestModel> requests;
+  final String? nextCursor;
+  final bool hasMore;
+  final bool isLoading;
+  final bool isLoadingMore;
+  final String? error;
+  final bool hasLoadedOnce;
+
+  const _StatusState({
+    this.requests = const [],
+    this.nextCursor,
+    this.hasMore = true,
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+    this.hasLoadedOnce = false,
+  });
+
+  _StatusState copyWith({
+    List<ServiceRequestModel>? requests,
+    Object? nextCursor = _unset,
+    bool? hasMore,
+    bool? isLoading,
+    bool? isLoadingMore,
+    String? error,
+    bool clearError = false,
+    bool? hasLoadedOnce,
+  }) {
+    return _StatusState(
+      requests: requests ?? this.requests,
+      nextCursor:
+          identical(nextCursor, _unset) ? this.nextCursor : nextCursor as String?,
+      hasMore: hasMore ?? this.hasMore,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      error: clearError ? null : (error ?? this.error),
+      hasLoadedOnce: hasLoadedOnce ?? this.hasLoadedOnce,
+    );
+  }
+}
 
 class HomeWorker extends StatefulWidget {
   const HomeWorker({super.key});
@@ -13,20 +62,20 @@ class HomeWorker extends StatefulWidget {
 }
 
 class _HomeWorkerState extends State<HomeWorker> {
-  final AssetImage backgroundImage = const AssetImage("assets/emptypicture.png");
-  CurrentUserModel? _currentUser;
-
   late final WorkerRequestService _service;
+  late final AccountSwitchService _accountSwitchService;
+  final ScrollController _scrollController = ScrollController();
+
+  CurrentUserModel? _currentUser;
+  AuthCheckUser? _authUser;
 
   bool _isInitialLoading = true;
-  bool _isTabLoading = false;
   bool _isActionLoading = false;
-
-  String? _error;
+  bool _isSwitchingAccount = false;
+  String? _globalError;
 
   String _selectedStatus = "pending";
 
-  List<ServiceRequestModel> _requests = [];
   Map<String, int> _stats = {
     "pending": 0,
     "accepted": 0,
@@ -35,95 +84,251 @@ class _HomeWorkerState extends State<HomeWorker> {
 
   final List<String> _statuses = ["pending", "accepted", "rejected"];
 
+  late Map<String, _StatusState> _statusData;
+
   @override
   void initState() {
     super.initState();
     _service = WorkerRequestService();
+    _accountSwitchService = AccountSwitchService();
+
+    _statusData = {
+      "pending": const _StatusState(),
+      "accepted": const _StatusState(),
+      "rejected": const _StatusState(),
+    };
+
+    _scrollController.addListener(_onScroll);
     _loadInitialData();
   }
 
-      Future<void> _loadInitialData() async {
-        setState(() {
-          _isInitialLoading = true;
-          _error = null;
-        });
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
 
-        try {
-          final results = await Future.wait([
-            _service.getCurrentUser(),
-            _service.getWorkerStats(),
-            _service.getWorkerRequests(status: _selectedStatus),
-          ]);
+  _StatusState get _currentStatusState => _statusData[_selectedStatus]!;
 
-          setState(() {
-            _currentUser = results[0] as CurrentUserModel;
-            _stats = results[1] as Map<String, int>;
-            _requests = results[2] as List<ServiceRequestModel>;
-          });
-        } catch (e) {
-          setState(() {
-            _error = e.toString();
-          });
-        } finally {
-          if (mounted) {
-            setState(() {
-              _isInitialLoading = false;
-            });
-          }
-        }
-      }
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
 
-    Future<void> _changeStatus(String status) async {
-      if (_selectedStatus == status || _isTabLoading) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 250) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _isInitialLoading = true;
+      _globalError = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _service.getCurrentUser(),
+        _service.getWorkerStats(),
+        _service.getWorkerRequests(status: _selectedStatus),
+        _accountSwitchService.checkAuth(),
+      ]);
+
+      final currentUser = results[0] as CurrentUserModel;
+      final stats = results[1] as Map<String, int>;
+      final firstPage = results[2] as PaginatedServiceRequestsResponse;
+      final authUser = results[3] as AuthCheckUser;
+
+      _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
+        requests: firstPage.docs,
+        nextCursor: firstPage.nextCursor,
+        hasMore: firstPage.docs.isNotEmpty && firstPage.nextCursor != null,
+        isLoading: false,
+        isLoadingMore: false,
+        hasLoadedOnce: true,
+        clearError: true,
+      );
 
       setState(() {
-        _selectedStatus = status;
-        _isTabLoading = true;
-        _error = null;
+        _currentUser = currentUser;
+        _stats = stats;
+        _authUser = authUser;
       });
-
-      try {
-        final requests = await _service.getWorkerRequests(status: status);
-
-        if (!mounted) return;
-
+    } catch (e) {
+      setState(() {
+        _globalError = e.toString();
+      });
+    } finally {
+      if (mounted) {
         setState(() {
-          _requests = requests;
+          _isInitialLoading = false;
         });
-      } catch (e) {
-        if (!mounted) return;
-
-        setState(() {
-          _error = e.toString();
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to load $status requests: $e")),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isTabLoading = false;
-          });
-        }
       }
     }
+  }
+
+  Future<void> _changeStatus(String status) async {
+    if (_selectedStatus == status) return;
+
+    setState(() {
+      _selectedStatus = status;
+    });
+
+    final state = _statusData[status]!;
+    if (state.hasLoadedOnce) return;
+
+    await _loadStatusFirstPage(status);
+  }
+
+  Future<void> _loadStatusFirstPage(String status) async {
+    final current = _statusData[status]!;
+
+    setState(() {
+      _statusData[status] = current.copyWith(
+        isLoading: true,
+        clearError: true,
+      );
+    });
+
+    try {
+      final response = await _service.getWorkerRequests(status: status);
+
+      if (!mounted) return;
+
+      setState(() {
+        _statusData[status] = _statusData[status]!.copyWith(
+          requests: response.docs,
+          nextCursor: response.nextCursor,
+          hasMore: response.docs.isNotEmpty && response.nextCursor != null,
+          isLoading: false,
+          isLoadingMore: false,
+          hasLoadedOnce: true,
+          clearError: true,
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _statusData[status] = _statusData[status]!.copyWith(
+          isLoading: false,
+          error: e.toString(),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load $status requests: $e")),
+      );
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final state = _currentStatusState;
+
+    if (_isInitialLoading ||
+        _isActionLoading ||
+        _isSwitchingAccount ||
+        state.isLoading ||
+        state.isLoadingMore ||
+        !state.hasMore ||
+        state.nextCursor == null) {
+      return;
+    }
+
+    setState(() {
+      _statusData[_selectedStatus] = state.copyWith(isLoadingMore: true);
+    });
+
+    try {
+      final response = await _service.getWorkerRequests(
+        status: _selectedStatus,
+        after: state.nextCursor,
+      );
+
+      if (!mounted) return;
+
+      final existingIds = state.requests.map((e) => e.id).toSet();
+      final merged = List<ServiceRequestModel>.from(state.requests);
+
+      for (final item in response.docs) {
+        if (!existingIds.contains(item.id)) {
+          merged.add(item);
+        }
+      }
+
+      setState(() {
+        _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
+          requests: merged,
+          nextCursor: response.nextCursor,
+          hasMore: response.docs.isNotEmpty && response.nextCursor != null,
+          isLoadingMore: false,
+          hasLoadedOnce: true,
+          clearError: true,
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
+          isLoadingMore: false,
+          error: e.toString(),
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to load more: $e")),
+      );
+    }
+  }
 
   Future<void> _refreshCurrentTab() async {
+    final state = _currentStatusState;
+
+    setState(() {
+      _statusData[_selectedStatus] = state.copyWith(
+        isLoading: true,
+        isLoadingMore: false,
+        clearError: true,
+      );
+    });
+
     try {
       final results = await Future.wait([
         _service.getWorkerStats(),
         _service.getWorkerRequests(status: _selectedStatus),
+        _accountSwitchService.checkAuth(),
       ]);
 
       if (!mounted) return;
 
+      final stats = results[0] as Map<String, int>;
+      final response = results[1] as PaginatedServiceRequestsResponse;
+      final authUser = results[2] as AuthCheckUser;
+
       setState(() {
-        _stats = results[0] as Map<String, int>;
-        _requests = results[1] as List<ServiceRequestModel>;
+        _stats = stats;
+        _authUser = authUser;
+        _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
+          requests: response.docs,
+          nextCursor: response.nextCursor,
+          hasMore: response.docs.isNotEmpty && response.nextCursor != null,
+          isLoading: false,
+          isLoadingMore: false,
+          hasLoadedOnce: true,
+          clearError: true,
+        );
       });
     } catch (e) {
       if (!mounted) return;
+
+      setState(() {
+        _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
+          isLoading: false,
+          error: e.toString(),
+        );
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Refresh failed: $e")),
@@ -216,6 +421,67 @@ class _HomeWorkerState extends State<HomeWorker> {
     }
   }
 
+  Future<void> _switchAccount() async {
+    if (_authUser == null) return;
+    if (_authUser!.role != "worker") return;
+
+    final targetRole =
+        _accountSwitchService.getTargetRole(_authUser!.currentRole);
+
+    setState(() {
+      _isSwitchingAccount = true;
+    });
+
+    try {
+      final newCurrentRole = await _accountSwitchService.switchRole(targetRole);
+
+      if (!mounted) return;
+
+      setState(() {
+        _authUser = AuthCheckUser(
+          id: _authUser!.id,
+          fullName: _authUser!.fullName,
+          email: _authUser!.email,
+          role: _authUser!.role,
+          currentRole: newCurrentRole,
+          image: _authUser!.image,
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Switched to $newCurrentRole account")),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(), // or LoginScreen()
+        ),
+        (route) => false,
+      );
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["error"]?["message"]?.toString() ??
+          e.response?.data?["message"]?.toString() ??
+          "Switch account failed";
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Switch account failed: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSwitchingAccount = false;
+        });
+      }
+    }
+  }
+
   Widget _buildStatCard(String title, int value) {
     return Expanded(
       child: Container(
@@ -255,9 +521,10 @@ class _HomeWorkerState extends State<HomeWorker> {
 
   Widget _buildStatusChip(String status) {
     final isSelected = _selectedStatus == status;
+    final state = _statusData[status]!;
 
     return GestureDetector(
-      onTap: _isTabLoading ? null : () => _changeStatus(status),
+      onTap: () => _changeStatus(status),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.only(right: 10, bottom: 8),
@@ -269,56 +536,71 @@ class _HomeWorkerState extends State<HomeWorker> {
             color: isSelected ? const Color(0xFF1F6FEB) : Colors.grey.shade300,
           ),
         ),
-        child: Text(
-          "${status[0].toUpperCase()}${status.substring(1)}",
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "${status[0].toUpperCase()}${status.substring(1)}",
+              style: GoogleFonts.instrumentSans(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (state.isLoading) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: isSelected ? Colors.white : const Color(0xFF1F6FEB),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchAccountButton() {
+    if (_authUser == null) return const SizedBox.shrink();
+    if (_authUser!.role != "worker") return const SizedBox.shrink();
+
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed: _isSwitchingAccount ? null : _switchAccount,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1F6FEB),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        icon: _isSwitchingAccount
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.swap_horiz, color: Colors.white),
+        label: Text(
+          _accountSwitchService.getButtonText(_authUser!.currentRole),
           style: GoogleFonts.instrumentSans(
-            color: isSelected ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildContent() {
-      if (_isInitialLoading) {
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 80),
-            child: CircularProgressIndicator(),
-          ),
-        );
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 80),
-          child: Column(
-            children: [
-              Text(
-                "Failed to load requests",
-                style: GoogleFonts.instrumentSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadInitialData,
-                child: const Text("Retry"),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
+  Widget _buildHeader() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -328,27 +610,43 @@ class _HomeWorkerState extends State<HomeWorker> {
             children: [
               InkWell(
                 borderRadius: BorderRadius.circular(50),
-                onTap: () {},
+               onTap: () async {
+                  final updated = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const WorkerProfileScreen(),
+                    ),
+                  );
+
+                  if (updated == true) {
+                    if (!mounted) return;
+                    await _loadInitialData();
+                  }
+                },
                 child: CircleAvatar(
                   radius: 30,
                   backgroundImage: (_currentUser?.image != null &&
                           _currentUser!.image!.isNotEmpty)
                       ? NetworkImage(_currentUser!.image!)
-                      : const AssetImage("assets/emptypicture.png") as ImageProvider,
+                      : const AssetImage("assets/emptypicture.png")
+                          as ImageProvider,
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                "Welcome, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : "Worker"}",
-                style: GoogleFonts.instrumentSans(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  "Welcome, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : "Worker"}",
+                  style: GoogleFonts.instrumentSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 18),
+        _buildSwitchAccountButton(),
+        const SizedBox(height: 30),
         Row(
           children: [
             _buildStatCard("Pending", _stats["pending"] ?? 0),
@@ -366,9 +664,7 @@ class _HomeWorkerState extends State<HomeWorker> {
         ),
         const SizedBox(height: 16),
         Wrap(
-          children: _statuses.map<Widget>((status) {
-            return _buildStatusChip(status);
-          }).toList(),
+          children: _statuses.map(_buildStatusChip).toList(),
         ),
         const SizedBox(height: 14),
         Row(
@@ -388,57 +684,194 @@ class _HomeWorkerState extends State<HomeWorker> {
           ],
         ),
         const SizedBox(height: 12),
-        if (_isTabLoading)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: LinearProgressIndicator(),
-          ),
-        if (_requests.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 30),
-              child: Text(
-                "No $_selectedStatus requests",
-                style: GoogleFonts.instrumentSans(fontSize: 16),
+      ],
+    );
+  }
+
+  Widget _buildInitialLoading() {
+    return const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+
+  Widget _buildGlobalError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Failed to load requests",
+              style: GoogleFonts.instrumentSans(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          )
-        else
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          child: Column(
-            key: ValueKey(_selectedStatus),
-            children: _requests.map<Widget>((request) {
-              return WorkerOrderCard(
+            const SizedBox(height: 10),
+            Text(
+              _globalError ?? "Unknown error",
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadInitialData,
+              child: const Text("Retry"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBodyList() {
+    final state = _currentStatusState;
+
+    if (state.error != null && state.requests.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "Failed to load $_selectedStatus requests",
+                  style: GoogleFonts.instrumentSans(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  state.error!,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _loadStatusFirstPage(_selectedStatus),
+                  child: const Text("Retry"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (state.requests.isEmpty && state.isLoading) {
+      return const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (state.requests.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Text(
+            "No $_selectedStatus requests",
+            style: GoogleFonts.instrumentSans(fontSize: 16),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index < state.requests.length) {
+            final request = state.requests[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: WorkerOrderCard(
                 request: request,
-                isUpdating: _isActionLoading,
+                isUpdating: _isActionLoading || _isSwitchingAccount,
                 onAccept: request.status == "pending"
                     ? () => _acceptRequest(request.id)
                     : null,
                 onReject: request.status == "pending"
                     ? () => _rejectRequest(request.id)
                     : null,
-              );
-            }).toList(),
-          ),
-        ),
-      ],
+              ),
+            );
+          }
+
+          if (state.isLoadingMore) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          if (!state.hasMore) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  "No more requests",
+                  style: GoogleFonts.instrumentSans(
+                    fontSize: 13,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return const SizedBox.shrink();
+        },
+        childCount: state.requests.length + 1,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isInitialLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: SafeArea(child: _buildInitialLoading()),
+      );
+    }
+
+    if (_globalError != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: SafeArea(child: _buildGlobalError()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshCurrentTab,
-          child: SingleChildScrollView(
+          child: CustomScrollView(
+            controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-              child: _buildContent(),
-            ),
+            slivers: [
+              SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: _buildHeader(),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: _buildBodyList(),
+              ),
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 30),
+              ),
+            ],
           ),
         ),
       ),

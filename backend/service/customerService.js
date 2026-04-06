@@ -10,9 +10,32 @@ import {
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
 
-export const getCustomerProfile = asyncHandler(async (req, res) => { });
+export const getCustomerProfile = asyncHandler(async (req, res) => { 
+  const userId = req.user._id;
+  if (req.user.currentRole !== "customer") {
+    throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
+  }
+  const customerProfile = await User.findById(userId).select("fullName email image");
+  return res.status(200).json({ success: true, data: customerProfile, error: null });
+});
 
-export const updateCustomerProfile = asyncHandler(async (req, res) => { });
+export const updateCustomerProfile = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const {fullName, image} = req.body;
+  if (req.user.currentRole !== "customer") {
+    throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
+  }
+  if (!fullName) {
+    throw new BadRequestError("Full name is required", "MISSING_FULL_NAME");
+  }
+  const updatedCustomer = await User.findByIdAndUpdate(
+    userId,
+    { fullName, image },
+    { new: true, runValidators: true },
+  ).select("fullName image");
+  return res.status(200).json({ success: true, data: updatedCustomer, error: null });
+});
+
 
 export const getFilteredWorkers = asyncHandler(async (req, res) => {
   const { skill, radiusKm = 5, sort = "distance", lat, lng } = req.validateQuery;
@@ -290,7 +313,7 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
   ]);
 
   const nextCursor =
-    workers.length > 0
+    workers.length === limit
       ? `${workers[workers.length - 1].fullName}|${workers[workers.length - 1]._id}`
       : null;
 

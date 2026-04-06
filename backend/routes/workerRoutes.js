@@ -10,14 +10,16 @@ import {
   getAllWorker,
   getWorkerById,
 } from "../service/workerService.js";
+import { workerProfileValidation } from "../middleware/WorkerProfileValidation.js";
 
 const router = express.Router();
 
 router.get("/service-requests/worker-status", protectRoute, getWorkerStatus);
 router.post("/switch-role", protectRoute, switchRole);
 router.get("/allWorkers", getAllWorker);
-router.get("/:id", getWorkerById);
 router.get("/profile", protectRoute, getWorkerProfile);
-router.put("/profile", protectRoute, updateWorkerProfile);
+router.put("/profile", protectRoute, workerProfileValidation, updateWorkerProfile);
+router.get("/:id", getWorkerById);
+
 
 export default router;

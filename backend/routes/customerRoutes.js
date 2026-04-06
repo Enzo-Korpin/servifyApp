@@ -10,12 +10,13 @@ import {
   getLocation,
 } from "../service/customerService.js";
 import { filterValidation } from "../middleware/filterValidation.js";
+import { customerProfileValidation } from "../middleware/CustomerProfileValidation.js";
 import { searchTextValidation } from "../middleware/searchTextValidation.js";
 
 const router = express.Router();
 
 router.get("/profile", protectRoute, getCustomerProfile);
-router.put("/profile", protectRoute, updateCustomerProfile);
+router.put("/profile", protectRoute, customerProfileValidation, updateCustomerProfile);
 
 router.get(
   "/filtered-workers",

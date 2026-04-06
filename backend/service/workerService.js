@@ -1,5 +1,6 @@
 import serviceRequest from "../models/serviceRequest.js";
 import WorkerProfile from "../models/workerProfile.js";
+import User from "../models/user.js";
 import mongoose from "mongoose";
 
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -13,9 +14,108 @@ import {
 } from "../errors/httpErrors.js";
 import { PassThrough } from "stream";
 
-export const getWorkerProfile = asyncHandler(async (req, res) => {});
+export const getWorkerProfile = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  if (req.user.currentRole !== "worker") {
+    throw new ForbiddenError("Must be Worker", "MUST_BE_WORKER");
+  }
+  const workerProfile = await WorkerProfile.findById(userId)
+    .select("bio yearsOfExperience skills")
+    .populate("_id", "fullName image ");
+  if (!workerProfile) {
+    throw new NotFoundError("Worker profile not found", "WORKER_PROFILE_NOT_FOUND");
+  }
+  return res.status(200).json({ success: true, data: workerProfile, error: null });
+});
 
-export const updateWorkerProfile = asyncHandler(async (req, res) => {});
+export const updateWorkerProfile = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  if (req.user.currentRole !== "worker") {
+    throw new ForbiddenError("Must be Worker", "MUST_BE_WORKER");
+  }
+
+  const { fullName, image, bio, yearsOfExperience, skills } = req.body;
+
+  const safeFullName = typeof fullName === "string" ? fullName.trim() : "";
+  const safeImage = typeof image === "string" ? image.trim() : "";
+  const safeBio = typeof bio === "string" ? bio.trim() : "";
+
+  if (!safeFullName) {
+    throw new BadRequestError("fullName is required", "MISSING_FULL_NAME");
+  }
+
+  if (!Array.isArray(skills)) {
+    throw new BadRequestError("skills must be an array", "INVALID_SKILLS");
+  }
+
+  const cleanedSkills = skills
+    .map((skill) => (typeof skill === "string" ? skill.trim().toLowerCase() : ""))
+    .filter((skill) => skill.length > 0);
+
+  if (cleanedSkills.length === 0) {
+    throw new BadRequestError(
+      "Skills must contain at least one valid non-empty skill",
+      "INVALID_SKILLS"
+    );
+  }
+
+  const session = await mongoose.startSession();
+
+  let updatedWorkerProfile;
+
+  try {
+    await session.withTransaction(async () => {
+      const user = await User.findByIdAndUpdate(
+        userId,
+        {
+          fullName: safeFullName,
+          image: safeImage,
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        }
+      ).select("fullName image");
+
+      if (!user) {
+        throw new NotFoundError("User not found", "USER_NOT_FOUND");
+      }
+
+      updatedWorkerProfile = await WorkerProfile.findByIdAndUpdate(
+        userId,
+        {
+          bio: safeBio,
+          yearsOfExperience,
+          skills: cleanedSkills,
+        },
+        {
+          new: true,
+          runValidators: true,
+          session,
+        }
+      )
+        .select("bio yearsOfExperience skills")
+        .populate("_id", "fullName image");
+
+      if (!updatedWorkerProfile) {
+        throw new NotFoundError(
+          "Worker profile not found",
+          "WORKER_PROFILE_NOT_FOUND"
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: updatedWorkerProfile,
+    error: null,
+  });
+});
 
 export const getAllWorker = asyncHandler(async (req, res) => {
   const workers = await WorkerProfile.find().populate("_id");
@@ -27,7 +127,7 @@ export const getWorkerById = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(workerId)) {
     throw new BadRequestError("Invalid worker ID", "INVALID_WORKER_ID");
   }
-  const worker = await WorkerProfile.findById(workerId).populate("_id","-password");
+  const worker = await WorkerProfile.findById(workerId).populate("_id", "-password");
   if (!worker) {
     throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
   }

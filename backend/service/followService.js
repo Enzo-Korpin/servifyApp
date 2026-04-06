@@ -154,7 +154,7 @@ export const getAllFollowingWorkers = asyncHandler(async (req, res) => {
   const following = docs.reverse();
 
   const nextCursor =
-    docs.length > 0
+    docs.length === limit
       ? `${docs[docs.length - 1].createdAt.toISOString()}|${docs[docs.length - 1]._id}`
       : null;
 

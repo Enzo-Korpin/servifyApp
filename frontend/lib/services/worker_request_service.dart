@@ -1,7 +1,17 @@
 import 'package:dio/dio.dart';
-import '../core/network/dio_client.dart'; // change path if your DioClient is elsewhere
+import '../core/network/dio_client.dart';
 import '../models/service_request_model.dart';
 import '../models/current_user_model.dart';
+
+class PaginatedServiceRequestsResponse {
+  final List<ServiceRequestModel> docs;
+  final String? nextCursor;
+
+  PaginatedServiceRequestsResponse({
+    required this.docs,
+    required this.nextCursor,
+  });
+}
 
 class WorkerRequestService {
   Future<Map<String, int>> getWorkerStats() async {
@@ -24,6 +34,7 @@ class WorkerRequestService {
   Future<CurrentUserModel> getCurrentUser() async {
     try {
       final response = await DioClient.dio.get("/api/auth/check-auth");
+
       return CurrentUserModel.fromJson(
         response.data["data"] as Map<String, dynamic>,
       );
@@ -32,20 +43,34 @@ class WorkerRequestService {
     }
   }
 
-  Future<List<ServiceRequestModel>> getWorkerRequests({
+  Future<PaginatedServiceRequestsResponse> getWorkerRequests({
     required String status,
+    String? after,
   }) async {
     try {
       final response = await DioClient.dio.get(
         "/api/service-requests/worker",
-        queryParameters: {"status": status},
+        queryParameters: {
+          "status": status,
+          if (after != null && after.trim().isNotEmpty) "after": after.trim(),
+        },
       );
 
-      final docs = response.data["data"]?["docs"] as List? ?? [];
+      final data = response.data["data"] as Map<String, dynamic>? ?? {};
+      final docsJson = (data["docs"] as List?) ?? const [];
 
-      return docs
+      final rawCursor = data["nextCursor"]?.toString();
+      final nextCursor =
+          (rawCursor == null || rawCursor.isEmpty) ? null : rawCursor;
+
+      final docs = docsJson
           .map((e) => ServiceRequestModel.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      return PaginatedServiceRequestsResponse(
+        docs: docs,
+        nextCursor: nextCursor,
+      );
     } on DioException catch (e) {
       throw Exception(_extractErrorMessage(e));
     }
@@ -90,22 +115,26 @@ class WorkerRequestService {
     final data = e.response?.data;
 
     if (data is Map<String, dynamic>) {
+      final message = data["message"];
+      if (message != null) return message.toString();
+
       final error = data["error"];
 
-      if (error is Map<String, dynamic>) {
-        final message = error["message"];
-        final details = error["details"];
-
-        if (message != null && details != null) {
-          return "$message - $details";
-        }
-        if (message != null) {
-          return message.toString();
-        }
+      if (error is String && error.trim().isNotEmpty) {
+        return error;
       }
 
-      if (error != null) {
-        return error.toString();
+      if (error is Map<String, dynamic>) {
+        final errorMessage = error["message"];
+        final details = error["details"];
+
+        if (errorMessage != null && details != null) {
+          return "$errorMessage - $details";
+        }
+
+        if (errorMessage != null) {
+          return errorMessage.toString();
+        }
       }
     }
 
