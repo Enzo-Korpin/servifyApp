@@ -349,7 +349,6 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
 
                       const SizedBox(height: 32),
 
-                      // Verify button
                       SizedBox(
                         width: double.infinity,
                         height: 54,
