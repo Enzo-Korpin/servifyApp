@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/core/network/dio_client.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/core/network/dio_client.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   const WorkerProfileScreen({super.key});
@@ -10,7 +10,8 @@ class WorkerProfileScreen extends StatefulWidget {
   State<WorkerProfileScreen> createState() => _WorkerProfileScreenState();
 }
 
-class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
+class _WorkerProfileScreenState extends State<WorkerProfileScreen>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
@@ -22,36 +23,98 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   List<String> _skills = [];
 
   late TextEditingController _fullNameController;
-  late TextEditingController _imageController;
   late TextEditingController _bioController;
   late TextEditingController _yearsController;
-  late TextEditingController _skillInputController;
+
+  final List<String> _availableSkills = [
+    "Plumbing",
+    "Electrical",
+    "Painting",
+    "Cleaning",
+    "Carpentry",
+    "AC Repair",
+    "Appliance Repair",
+    "Tiling",
+    "Gypsum",
+    "Aluminum",
+  ];
+
+  // ── Entrance animation ──
+  late AnimationController _entranceController;
+  late Animation<double> _headerFade;
+  late Animation<Offset> _headerSlide;
+  late Animation<double> _cardsFade;
+  late Animation<Offset> _cardsSlide;
+
+  // ── Theme colours ──
+  static const _navyDark = Color(0xFF0A1628);
+  static const _navyMid = Color(0xFF1E40AF);
+  static const _bgLight = Color(0xFFEFF6FF);
+  static const _borderBlue = Color(0xFFDBEAFE);
+  static const _textDark = Color(0xFF1E293B);
+  static const _textMuted = Color(0xFF94A3B8);
+  static const _hintColor = Color(0xFFCBD5E1);
 
   @override
   void initState() {
     super.initState();
     _fullNameController = TextEditingController();
-    _imageController = TextEditingController();
     _bioController = TextEditingController();
     _yearsController = TextEditingController();
-    _skillInputController = TextEditingController();
+
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+
+    _headerFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
+    );
+
+    _headerSlide = Tween<Offset>(
+      begin: const Offset(0, -0.05),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+      ),
+    );
+
+    _cardsFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.35, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    _cardsSlide = Tween<Offset>(
+      begin: const Offset(0, 0.07),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.35, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
     _loadWorkerProfile();
   }
 
   @override
   void dispose() {
+    _entranceController.dispose();
     _fullNameController.dispose();
-    _imageController.dispose();
     _bioController.dispose();
     _yearsController.dispose();
-    _skillInputController.dispose();
     super.dispose();
   }
 
   Future<void> _loadWorkerProfile() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final response = await DioClient.dio.get("/api/worker/profile");
@@ -69,35 +132,22 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             .toList();
 
         _fullNameController.text = _fullName;
-        _imageController.text = _image;
         _bioController.text = _bio;
         _yearsController.text = _yearsOfExperience.toString();
-
         _isLoading = false;
       });
+
+      _entranceController.forward(from: 0);
     } on DioException catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      final message =
-          e.response?.data?["error"]?["message"]?.toString() ??
-          e.response?.data?["message"]?.toString() ??
-          "Failed to load worker profile";
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+      setState(() => _isLoading = false);
+      _showSnack(
+        e.response?.data?["error"]?["message"]?.toString() ??
+            e.response?.data?["message"]?.toString() ??
+            "Failed to load worker profile",
       );
     } catch (_) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to load worker profile")),
-      );
+      setState(() => _isLoading = false);
+      _showSnack("Failed to load worker profile");
     }
   }
 
@@ -105,7 +155,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     setState(() {
       if (_isEditing) {
         _fullNameController.text = _fullName;
-        _imageController.text = _image;
         _bioController.text = _bio;
         _yearsController.text = _yearsOfExperience.toString();
       }
@@ -113,75 +162,184 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     });
   }
 
-  void _addSkill() {
-    final skill = _skillInputController.text.trim();
-    if (skill.isEmpty) return;
-
-    final exists = _skills.any(
-      (s) => s.toLowerCase() == skill.toLowerCase(),
-    );
-
-    if (exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Skill already exists")),
-      );
-      return;
-    }
-
-    setState(() {
-      _skills.add(skill);
-      _skillInputController.clear();
-    });
+  void _removeSkill(String skill) {
+    setState(() => _skills.remove(skill));
   }
 
-  void _removeSkill(String skill) {
-    setState(() {
-      _skills.remove(skill);
-    });
+  void _openSkillsSelector() async {
+    final tempSelected = List<String>.from(_skills);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.75,
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFCBD5E1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Select Skills",
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: _textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "You can choose more than one skill",
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: _textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: _availableSkills.length,
+                            itemBuilder: (context, index) {
+                              final skill = _availableSkills[index];
+                              final isSelected = tempSelected.contains(skill);
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? _navyMid
+                                        : const Color(0xFFE2E8F0),
+                                    width: 1.4,
+                                  ),
+                                ),
+                                child: CheckboxListTile(
+                                  value: isSelected,
+                                  activeColor: _navyMid,
+                                  checkboxShape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                  title: Text(
+                                    skill,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textDark,
+                                    ),
+                                  ),
+                                  onChanged: (value) {
+                                    setModalState(() {
+                                      if (value == true) {
+                                        if (!tempSelected.contains(skill)) {
+                                          tempSelected.add(skill);
+                                        }
+                                      } else {
+                                        tempSelected.remove(skill);
+                                      }
+                                    });
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _skills = tempSelected;
+                              });
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _navyMid,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              "Done",
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveProfile() async {
     final fullName = _fullNameController.text.trim();
-    final image = _imageController.text.trim();
     final bio = _bioController.text.trim();
     final years = int.tryParse(_yearsController.text.trim());
-
-    final cleanedSkills = _skills
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+    final cleanedSkills =
+        _skills.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
     if (fullName.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Full name must be at least 2 characters")),
-      );
+      _showSnack("Full name must be at least 2 characters");
       return;
     }
-
     if (years == null || years < 0 || years > 60) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Years of experience must be between 0 and 60")),
-      );
+      _showSnack("Years of experience must be between 0 and 60");
       return;
     }
-
     if (cleanedSkills.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Add at least one skill")),
-      );
+      _showSnack("Add at least one skill");
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
     try {
       final response = await DioClient.dio.put(
         "/api/worker/profile",
         data: {
           "fullName": fullName,
-          "image": image,
+          "image": _image,
           "bio": bio,
           "yearsOfExperience": years,
           "skills": cleanedSkills,
@@ -193,7 +351,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       setState(() {
         _fullName = userData["fullName"]?.toString() ?? fullName;
-        _image = userData["image"]?.toString() ?? image;
+        _image = userData["image"]?.toString() ?? _image;
         _bio = data["bio"]?.toString() ?? bio;
         _yearsOfExperience = (data["yearsOfExperience"] as num?)?.toInt() ?? years;
         _skills = ((data["skills"] as List?) ?? [])
@@ -202,61 +360,91 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             .toList();
 
         _fullNameController.text = _fullName;
-        _imageController.text = _image;
         _bioController.text = _bio;
         _yearsController.text = _yearsOfExperience.toString();
-
         _isEditing = false;
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Worker profile updated successfully")),
-    );
-
-    Navigator.pop(context, true);
+      _showSnack("Worker profile updated successfully");
+      Navigator.pop(context, true);
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["error"]?["message"]?.toString() ??
-          e.response?.data?["message"]?.toString() ??
-          "Update failed";
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+      _showSnack(
+        e.response?.data?["error"]?["message"]?.toString() ??
+            e.response?.data?["message"]?.toString() ??
+            "Update failed",
       );
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Update failed")),
-      );
+      _showSnack("Update failed");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.inter()),
+        backgroundColor: _navyMid,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Widget _buildAvatar() {
-    if (_image.isNotEmpty) {
-      return CircleAvatar(
-        radius: 55,
-        backgroundImage: NetworkImage(_image),
-      );
-    }
-
-    return const CircleAvatar(
-      radius: 55,
-      backgroundColor: Color(0xFFE2E8F0),
-      child: Icon(Icons.person, size: 44, color: Colors.black54),
+    return Stack(
+      children: [
+        Container(
+          width: 86,
+          height: 86,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFF63B3FF).withOpacity(0.35),
+              width: 3,
+            ),
+          ),
+          child: CircleAvatar(
+            radius: 40,
+            backgroundColor: const Color(0xFF1A3A6E),
+            backgroundImage: _image.isNotEmpty ? NetworkImage(_image) : null,
+            child: _image.isEmpty
+                ? const Icon(
+                    Icons.person_outline_rounded,
+                    size: 38,
+                    color: Color(0xFF63B3FF),
+                  )
+                : null,
+          ),
+        ),
+        Positioned(
+          bottom: 2,
+          right: 2,
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: _navyMid,
+              shape: BoxShape.circle,
+              border: Border.all(color: _navyDark, width: 2),
+            ),
+            child: const Icon(
+              Icons.edit_rounded,
+              size: 11,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildReadOnlyTile({
+  Widget _infoTile({
     required IconData icon,
-    required String title,
+    required String label,
     required String value,
   }) {
     return Container(
@@ -264,30 +452,42 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderBlue, width: 1.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.grey.shade700),
-          const SizedBox(width: 10),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _bgLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: _navyMid, size: 17),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: GoogleFonts.poppins(
+                  label.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    color: _textMuted,
+                    letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
-                  value.isNotEmpty ? value : "-",
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey.shade700,
+                  value.isNotEmpty ? value : "—",
+                  style: GoogleFonts.inter(
                     fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _textDark,
                   ),
                 ),
               ],
@@ -298,93 +498,208 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
   }
 
-  Widget _buildSkillsWrap() {
+  Widget _buildSkillsCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderBlue, width: 1.5),
       ),
-      child: _skills.isEmpty
-          ? Text(
-              "No skills added",
-              style: GoogleFonts.poppins(color: Colors.grey),
-            )
-          : Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _skills.map((skill) {
-                return Chip(
-                  label: Text(skill),
-                  deleteIcon: _isEditing ? const Icon(Icons.close, size: 18) : null,
-                  onDeleted: _isEditing ? () => _removeSkill(skill) : null,
-                );
-              }).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "SKILLS",
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: _textMuted,
+              letterSpacing: 0.8,
             ),
+          ),
+          const SizedBox(height: 10),
+          _skills.isEmpty
+              ? Text(
+                  "No skills added",
+                  style: GoogleFonts.inter(color: _textMuted, fontSize: 13),
+                )
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _skills.map((skill) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _bgLight,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _borderBlue, width: 1.5),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            skill,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _navyMid,
+                            ),
+                          ),
+                          if (_isEditing) ...[
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => _removeSkill(skill),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                size: 13,
+                                color: _navyMid,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkillsDropdownSelector() {
+    return GestureDetector(
+      onTap: _openSkillsSelector,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _borderBlue, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.build_circle_outlined, color: _textMuted, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _skills.isEmpty
+                    ? "Select one or more skills"
+                    : _skills.join(", "),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: _skills.isEmpty ? _hintColor : _textDark,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: _textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _styledField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    VoidCallback? onEditingComplete,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF374151),
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 7),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          onEditingComplete: onEditingComplete,
+          style: GoogleFonts.inter(fontSize: 14, color: _textDark),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: _textMuted, size: 18),
+            hintStyle: GoogleFonts.inter(color: _hintColor, fontSize: 13),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: _borderBlue, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: _navyMid, width: 2),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: _borderBlue, width: 1.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildEditFields() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
+        _styledField(
           controller: _fullNameController,
-          decoration: const InputDecoration(
-            labelText: "Full Name",
-            border: OutlineInputBorder(),
-          ),
+          label: "Full Name",
+          icon: Icons.person_outline_rounded,
         ),
         const SizedBox(height: 14),
-        TextField(
-          controller: _imageController,
-          decoration: const InputDecoration(
-            labelText: "Image URL",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
+        _styledField(
           controller: _bioController,
+          label: "Bio",
+          icon: Icons.description_outlined,
           maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: "Bio",
-            border: OutlineInputBorder(),
-            alignLabelWithHint: true,
-          ),
         ),
         const SizedBox(height: 14),
-        TextField(
+        _styledField(
           controller: _yearsController,
+          label: "Years of Experience",
+          icon: Icons.access_time_rounded,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: "Years of Experience",
-            border: OutlineInputBorder(),
-          ),
         ),
         const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _skillInputController,
-                decoration: const InputDecoration(
-                  labelText: "Add Skill",
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => _addSkill(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _addSkill,
-                child: const Text("Add"),
-              ),
-            ),
-          ],
+        Text(
+          "SKILLS",
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF374151),
+            letterSpacing: 0.8,
+          ),
         ),
+        const SizedBox(height: 7),
+        _buildSkillsDropdownSelector(),
+        const SizedBox(height: 10),
+        _buildSkillsCard(),
       ],
     );
   }
@@ -393,137 +708,206 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF5F7FA),
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: _bgLight,
+        body: Center(
+          child: CircularProgressIndicator(color: _navyMid),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F7FA),
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          "Worker Profile",
-          style: GoogleFonts.poppins(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: Column(
-          children: [
-            _buildAvatar(),
-            const SizedBox(height: 14),
-            Text(
-              _fullName.isNotEmpty ? _fullName : "Worker",
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            if (_isEditing) _buildEditFields(),
-
-            if (!_isEditing) ...[
-              _buildReadOnlyTile(
-                icon: Icons.person_outline,
-                title: "Full Name",
-                value: _fullName,
-              ),
-              const SizedBox(height: 12),
-              _buildReadOnlyTile(
-                icon: Icons.image_outlined,
-                title: "Image URL",
-                value: _image,
-              ),
-              const SizedBox(height: 12),
-              _buildReadOnlyTile(
-                icon: Icons.work_outline,
-                title: "Bio",
-                value: _bio,
-              ),
-              const SizedBox(height: 12),
-              _buildReadOnlyTile(
-                icon: Icons.timeline_outlined,
-                title: "Years of Experience",
-                value: _yearsOfExperience.toString(),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            if (_isEditing) const SizedBox(height: 14),
-
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Skills",
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildSkillsWrap(),
-            const SizedBox(height: 24),
-
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _isSaving ? null : _toggleEdit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFDCEEFF),
-                ),
-                child: Text(
-                  _isEditing ? "Cancel" : "Edit Worker Profile",
-                  style: GoogleFonts.poppins(
-                    color: Colors.blue.shade700,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-
-            if (_isEditing) ...[
-              const SizedBox(height: 12),
-              SizedBox(
+      backgroundColor: _bgLight,
+      body: Column(
+        children: [
+          FadeTransition(
+            opacity: _headerFade,
+            child: SlideTransition(
+              position: _headerSlide,
+              child: Container(
                 width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1F6FEB),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                color: _navyDark,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => Navigator.maybePop(context),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFF63B3FF).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFF63B3FF)
+                                        .withOpacity(0.2),
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.chevron_left_rounded,
+                                  color: Color(0xFF63B3FF),
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                "Worker Profile",
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.inter(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 36),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _buildAvatar(),
+                        const SizedBox(height: 12),
+                        Text(
+                          _fullName.isNotEmpty ? _fullName : "Worker",
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
                             color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          "Save Changes",
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Worker account",
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFFB4D2FF).withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+          Expanded(
+            child: FadeTransition(
+              opacity: _cardsFade,
+              child: SlideTransition(
+                position: _cardsSlide,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_isEditing)
+                        _buildEditFields()
+                      else ...[
+                        _infoTile(
+                          icon: Icons.person_outline_rounded,
+                          label: "Full Name",
+                          value: _fullName,
+                        ),
+                        const SizedBox(height: 10),
+                        _infoTile(
+                          icon: Icons.description_outlined,
+                          label: "Bio",
+                          value: _bio,
+                        ),
+                        const SizedBox(height: 10),
+                        _infoTile(
+                          icon: Icons.access_time_rounded,
+                          label: "Years of Experience",
+                          value: "$_yearsOfExperience years",
+                        ),
+                        const SizedBox(height: 10),
+                        _buildSkillsCard(),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: _isSaving ? null : _toggleEdit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                _isEditing ? Colors.white : _navyMid,
+                            disabledBackgroundColor: _navyMid.withOpacity(0.5),
+                            elevation: 0,
+                            side: _isEditing
+                                ? const BorderSide(
+                                    color: _borderBlue,
+                                    width: 1.5,
+                                  )
+                                : BorderSide.none,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: Icon(
+                            _isEditing
+                                ? Icons.close_rounded
+                                : Icons.edit_rounded,
+                            color: _isEditing ? _navyMid : Colors.white,
+                            size: 18,
+                          ),
+                          label: Text(
+                            _isEditing ? "Cancel" : "Edit Worker Profile",
+                            style: GoogleFonts.inter(
+                              color: _isEditing ? _navyMid : Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_isEditing) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _saveProfile,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _navyMid,
+                              disabledBackgroundColor: _navyMid.withOpacity(0.5),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    "Save Changes",
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
