@@ -15,7 +15,6 @@ class ProfileWorker extends StatefulWidget {
 
 class _ProfileWorkerState extends State<ProfileWorker> {
   bool _isLoading = true;
-  bool _isFollowing = false;
   String? _error;
 
   String fullName = "";
@@ -56,9 +55,9 @@ class _ProfileWorkerState extends State<ProfileWorker> {
         fullName = (user["fullName"] ?? "").toString();
         imageUrl = (user["image"] ?? "").toString();
         bio = (data["bio"] ?? "").toString();
-        yearsOfExperience = ((data["yearsOfExperience"] ?? 0) as num).toInt();
+        yearsOfExperience = (data["yearsOfExperience"] ?? 0) as int;
         rate = ((data["rate"] ?? 0) as num).toDouble();
-        ratingCount = ((data["ratingCount"] ?? 0) as num).toInt();
+        ratingCount = (data["ratingCount"] ?? 0) as int;
         skills = List<String>.from(data["skills"] ?? []);
         _isLoading = false;
       });
@@ -82,11 +81,16 @@ class _ProfileWorkerState extends State<ProfileWorker> {
     }
   }
 
+  String get skillsText {
+    if (skills.isEmpty) return "No skills added";
+    return skills.map(_capitalize).join(", ");
+  }
+
   String get aboutTitle {
     final firstName = fullName.trim().isEmpty
         ? "Worker"
         : fullName.trim().split(" ").first;
-    return "ABOUT $firstName";
+    return "About $firstName";
   }
 
   String _capitalize(String value) {
@@ -95,483 +99,32 @@ class _ProfileWorkerState extends State<ProfileWorker> {
   }
 
   List<Widget> _buildStars(double rating) {
-    final fullStars = rating.floor().clamp(0, 5);
-    final hasHalfStar = (rating - fullStars) >= 0.5;
-    final emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-
-    return [
-      ...List.generate(
-        fullStars,
-        (_) => const Icon(
-          Icons.star_rounded,
-          color: Color(0xFFFFB800),
-          size: 22,
-        ),
+    final rounded = rating.round().clamp(0, 5);
+    return List.generate(
+      5,
+      (index) => Icon(
+        index < rounded ? Icons.star : Icons.star_border,
+        color: Colors.orange,
       ),
-      if (hasHalfStar)
-        const Icon(
-          Icons.star_half_rounded,
-          color: Color(0xFFFFB800),
-          size: 22,
-        ),
-      ...List.generate(
-        emptyStars,
-        (_) => const Icon(
-          Icons.star_rounded,
-          color: Color(0xFFD8DCE6),
-          size: 22,
-        ),
-      ),
-    ];
+    );
   }
 
   Widget _buildAvatar() {
     if (imageUrl.isNotEmpty) {
-      return Container(
-        width: 104,
-        height: 104,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFFB9C5DE),
-          border: Border.all(color: Colors.white, width: 3),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipOval(
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) {
-              return const Icon(
-                Icons.person_outline_rounded,
-                size: 52,
-                color: Colors.white,
-              );
-            },
-          ),
-        ),
+      return CircleAvatar(
+        radius: 65,
+        backgroundColor: Colors.grey.shade300,
+        backgroundImage: NetworkImage(imageUrl),
       );
     }
 
-    return Container(
-      width: 104,
-      height: 104,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFB9C5DE),
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.person_outline_rounded,
-        size: 52,
+    return const CircleAvatar(
+      radius: 65,
+      backgroundColor: Colors.grey,
+      child: Icon(
+        Icons.person,
+        size: 60,
         color: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback onPressed,
-    bool isPrimary = false,
-  }) {
-    return Expanded(
-      child: SizedBox(
-        height: 50,
-        child: ElevatedButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-          label: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            elevation: isPrimary ? 2 : 0,
-            backgroundColor:
-                isPrimary ? const Color(0xFF2F57F6) : const Color(0xFFF7F7FA),
-            foregroundColor:
-                isPrimary ? Colors.white : const Color(0xFF52607A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(
-                color: isPrimary
-                    ? const Color(0xFF2F57F6)
-                    : const Color(0xFFE3E6EE),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F5F8),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 15, color: const Color(0xFFA2AAB8)),
-                const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                    color: const Color(0xFFA2AAB8),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF2C3445),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required IconData icon,
-    required String title,
-    required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F5F8),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 15, color: const Color(0xFFA2AAB8)),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                  color: const Color(0xFFA2AAB8),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSkillChip(String skill) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE4ECFF),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        _capitalize(skill),
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: const Color(0xFF4B6FEA),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadedContent() {
-    final topPadding = MediaQuery.of(context).padding.top;
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: double.infinity,
-                height: topPadding + 140,
-                color: const Color(0xFF0B1E4A),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(18, topPadding + 10, 18, 0),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Transform.translate(
-                        offset: const Offset(0, -6),
-                        child: Text(
-                          "Worker Profile",
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: -52,
-                child: _buildAvatar(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 62),
-
-          Text(
-            fullName.isEmpty ? "Worker Name" : fullName,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF24324A),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFAFAFB),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    _buildActionButton(
-                      label: "Chat",
-                      icon: Icons.chat_bubble_outline_rounded,
-                      onPressed: () {},
-                    ),
-                    const SizedBox(width: 10),
-                    _buildActionButton(
-                      label: _isFollowing ? "Following" : "Follow",
-                      icon: _isFollowing
-                          ? Icons.check_rounded
-                          : Icons.person_add_alt_1_rounded,
-                      isPrimary: true,
-                      onPressed: () {
-                        setState(() {
-                          _isFollowing = !_isFollowing;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-
-                Row(
-                  children: [
-                    _buildTopStatCard(
-                      icon: Icons.access_time_rounded,
-                      title: "Experience",
-                      value: "$yearsOfExperience Years",
-                    ),
-                    const SizedBox(width: 10),
-                    _buildTopStatCard(
-                      icon: Icons.handyman_outlined,
-                      title: "Skills",
-                      value: skills.length.toString(),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                _buildSectionCard(
-                  icon: Icons.handyman_outlined,
-                  title: "Skills",
-                  child: skills.isEmpty
-                      ? Text(
-                          "No skills added",
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF9CA3AF),
-                          ),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: skills.map(_buildSkillChip).toList(),
-                        ),
-                ),
-
-                const SizedBox(height: 12),
-
-                _buildSectionCard(
-                  icon: Icons.info_outline_rounded,
-                  title: aboutTitle,
-                  child: Text(
-                    bio.trim().isEmpty ? "No bio added yet." : bio,
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                _buildSectionCard(
-                  icon: Icons.reviews_outlined,
-                  title: "CUSTOMER REVIEWS",
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        rate.toStringAsFixed(1),
-                        style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1F2937),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: _buildStars(rate)),
-                              const SizedBox(height: 2),
-                              Text(
-                                "($ratingCount ${ratingCount == 1 ? "review" : "reviews"})",
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF9CA3AF),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ServiceRequestScreen(
-                        workerId: widget.workerId,
-                        workerName: fullName,
-                        workerImage: imageUrl,
-                        workerSkills: skills,
-                        workerRating: rate,
-                      ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  elevation: 2,
-                  backgroundColor: const Color(0xFF2F57F6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  "Request Service",
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-        ],
       ),
     );
   }
@@ -591,7 +144,7 @@ class _ProfileWorkerState extends State<ProfileWorker> {
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 16),
+                style: const TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -604,13 +157,241 @@ class _ProfileWorkerState extends State<ProfileWorker> {
       );
     }
 
-    return _buildLoadedContent();
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 30, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Text(
+                "Profile Worker",
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(child: _buildAvatar()),
+            const SizedBox(height: 20),
+            Center(
+              child: Text(
+                fullName.isEmpty ? "Worker Name" : fullName,
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: Opacity(
+                opacity: 0.60,
+                child: Text(
+                  skillsText,
+                  style: GoogleFonts.inriaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            SizedBox(
+              width: double.infinity,
+              child: SizedBox(
+                height: 60,
+                child: ElevatedButton(
+                  onPressed: () {},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD9D9D9),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline, color: Colors.black),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Chat",
+                        style: GoogleFonts.inriaSans(
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 40),
+            const Divider(),
+            const SizedBox(height: 10),
+
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "Experience",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        "$yearsOfExperience Years",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "Skills",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        skills.isEmpty ? "No skills" : skills.length.toString(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 15),
+            const Divider(thickness: 1),
+            const SizedBox(height: 20),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  aboutTitle,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  bio.trim().isEmpty ? "No bio added yet." : bio,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 25),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Customer Reviews",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  rate.toStringAsFixed(1),
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
+                  children: _buildStars(rate),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  "($ratingCount reviews)",
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 25),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ServiceRequestScreen(
+                        workerId: widget.workerId,
+                        workerName: fullName,
+                        workerImage: imageUrl,
+                        workerSkills: skills,
+                        workerRating: rate,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF12BFFF),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  "Request Service",
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F3F6),
+      backgroundColor: const Color(0xFFF0F0F0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF0F0F0),
+        elevation: 0,
+        title: const Text(
+          "Worker Profile",
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.black,
+          ),
+        ),
+      ),
       body: _buildBody(),
     );
   }

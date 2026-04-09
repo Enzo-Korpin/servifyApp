@@ -8,7 +8,6 @@ import 'package:frontend/core/network/dio_client.dart';
 import 'package:frontend/profiles/profile_user.dart';
 import 'package:frontend/requests/Requists_page.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 class WorkerMapPage extends StatefulWidget {
@@ -18,8 +17,7 @@ class WorkerMapPage extends StatefulWidget {
   State<WorkerMapPage> createState() => _WorkerMapPageState();
 }
 
-class _WorkerMapPageState extends State<WorkerMapPage>
-    with SingleTickerProviderStateMixin {
+class _WorkerMapPageState extends State<WorkerMapPage> {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
 
@@ -33,16 +31,12 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   double? _userLat;
   double? _userLng;
 
-  String? _selectedSkill;
-  String _activeSort = 'distance';
+  String? _selectedSkill; // null = all
+  String _activeSort = 'distance'; // distance | rating
   bool _distanceAscending = true;
   bool _ratingDescending = true;
 
   List<Map<String, dynamic>> _allWorkers = [];
-
-  late AnimationController _animController;
-  final List<Animation<Offset>> _slideAnimations = [];
-  final List<Animation<double>> _fadeAnimations = [];
 
   static const LatLng _fallbackLocation = LatLng(31.9539, 35.9106);
 
@@ -82,10 +76,6 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
     _searchController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -94,44 +84,13 @@ class _WorkerMapPageState extends State<WorkerMapPage>
 
   @override
   void dispose() {
-    _animController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _buildAnimations(int count) {
-    _slideAnimations.clear();
-    _fadeAnimations.clear();
-    for (int i = 0; i < count; i++) {
-      final start = (i * 0.12).clamp(0.0, 0.85);
-      final end = (start + 0.45).clamp(0.0, 1.0);
-      _slideAnimations.add(
-        Tween<Offset>(begin: const Offset(-0.4, 0), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animController,
-            curve: Interval(start, end, curve: Curves.easeOut),
-          ),
-        ),
-      );
-      _fadeAnimations.add(
-        Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: _animController,
-            curve: Interval(start, end, curve: Curves.easeOut),
-          ),
-        ),
-      );
-    }
-  }
-
-  void _triggerAnimation(int count) {
-    _buildAnimations(count);
-    _animController.reset();
-    _animController.forward();
-  }
-
   Future<void> _loadInitialData() async {
     await _fetchUserLocationFromBackend();
+
     if (_userLat == null || _userLng == null) {
       if (!mounted) return;
       setState(() {
@@ -140,11 +99,17 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       });
       _showMessage("Using default location");
     }
+
     await _fetchWorkers();
   }
 
   Future<void> _fetchUserLocationFromBackend() async {
-    if (mounted) setState(() => _isLoadingUserLocation = true);
+    if (mounted) {
+      setState(() {
+        _isLoadingUserLocation = true;
+      });
+    }
+
     try {
       final response = await DioClient.dio.get(
         '/api/auth/check-auth',
@@ -153,59 +118,79 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+
       final data = response.data;
       final coords = (data["data"]?["location"]?["coordinates"] ?? []) as List;
+
       if (coords.length != 2) {
         _showMessage("User location not found");
         return;
       }
+
       final lng = (coords[0] as num).toDouble();
       final lat = (coords[1] as num).toDouble();
+
       if (!mounted) return;
+
       setState(() {
         _userLat = lat;
         _userLng = lng;
       });
+
       if (_useMap) {
-        final z = _mapController.camera.zoom == 0
-            ? 13.0
-            : _mapController.camera.zoom;
-        _mapController.move(LatLng(lat, lng), z);
+        final currentZoom =
+            _mapController.camera.zoom == 0 ? 13.0 : _mapController.camera.zoom;
+        _mapController.move(LatLng(lat, lng), currentZoom);
       }
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ??
-            "Failed to load user location",
-      );
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Failed to load user location";
+      _showMessage(message);
     } catch (e) {
       _showMessage("Failed to load user location: $e");
     } finally {
-      if (mounted) setState(() => _isLoadingUserLocation = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingUserLocation = false;
+        });
+      }
     }
   }
 
   Future<void> _getCurrentLocation() async {
     if (_isGettingLocation) return;
-    setState(() => _isGettingLocation = true);
+
+    setState(() {
+      _isGettingLocation = true;
+    });
+
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showMessage("Location services are disabled");
         return;
       }
+
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied)
+
+      if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+      }
+
       if (permission == LocationPermission.denied) {
         _showMessage("Location permission denied");
         return;
       }
+
       if (permission == LocationPermission.deniedForever) {
         _showMessage("Location permission permanently denied");
         return;
       }
 
       Position? position;
+
       try {
         position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
@@ -220,40 +205,60 @@ class _WorkerMapPageState extends State<WorkerMapPage>
         } catch (_) {
           position = await Geolocator.getLastKnownPosition();
           if (position == null) {
-            _showMessage("Could not determine location.");
+            _showMessage(
+              "Could not determine location. Enable location services and try again.",
+            );
             return;
           }
         }
       }
 
       if (!mounted) return;
+
       setState(() {
         _userLat = position!.latitude;
         _userLng = position.longitude;
       });
-      if (_useMap)
+
+      if (_useMap) {
         _mapController.move(
           LatLng(_userLat!, _userLng!),
           _mapController.camera.zoom == 0 ? 13.0 : _mapController.camera.zoom,
         );
+      }
+
       await _fetchWorkers();
+
       _showMessage("Showing workers near your current location");
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to get location",
-      );
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Failed to get location";
+      _showMessage(message);
     } catch (e) {
       _showMessage("Failed to get location: $e");
     } finally {
-      if (mounted) setState(() => _isGettingLocation = false);
+      if (mounted) {
+        setState(() {
+          _isGettingLocation = false;
+        });
+      }
     }
   }
 
   Future<void> _fetchWorkers() async {
     if (_userLat == null || _userLng == null) return;
-    if (mounted) setState(() => _isLoadingWorkers = true);
+
+    if (mounted) {
+      setState(() {
+        _isLoadingWorkers = true;
+      });
+    }
+
     try {
       final int limit = _selectedSkill == null ? 15 : 20;
+
       final queryParameters = <String, dynamic>{
         "lat": _userLat,
         "lng": _userLng,
@@ -261,7 +266,11 @@ class _WorkerMapPageState extends State<WorkerMapPage>
         "limit": limit,
         "sort": _activeSort,
       };
-      if (_selectedSkill != null) queryParameters["skill"] = _selectedSkill;
+
+      if (_selectedSkill != null) {
+        queryParameters["skill"] = _selectedSkill;
+      }
+
       final response = await DioClient.dio.get(
         '/api/customer/filtered-workers',
         queryParameters: queryParameters,
@@ -270,21 +279,22 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+
       final data = response.data;
       final List rawWorkers = (data["data"]?["workers"] ?? []) as List;
+
       _allWorkers = rawWorkers.map<Map<String, dynamic>>((worker) {
-        final profile = Map<String, dynamic>.from(
-          worker["workerProfile"] ?? {},
-        );
+        final profile = Map<String, dynamic>.from(worker["workerProfile"] ?? {});
         final location = Map<String, dynamic>.from(worker["location"] ?? {});
         final coords = (location["coordinates"] ?? [0.0, 0.0]) as List;
-        final double lng = coords.isNotEmpty
-            ? (coords[0] as num).toDouble()
-            : 0.0;
-        final double lat = coords.length > 1
-            ? (coords[1] as num).toDouble()
-            : 0.0;
+
+        final double lng =
+            coords.isNotEmpty ? (coords[0] as num).toDouble() : 0.0;
+        final double lat =
+            coords.length > 1 ? (coords[1] as num).toDouble() : 0.0;
+
         final skills = List<String>.from(profile["skills"] ?? []);
+
         return {
           "_id": worker["_id"],
           "name": worker["fullName"] ?? "",
@@ -302,37 +312,48 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           "image": worker["image"],
         };
       }).toList();
+
       _applyLocalSort();
-      _triggerAnimation(_allWorkers.length);
-      if (mounted) setState(() {});
+
+      if (mounted) {
+        setState(() {});
+      }
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to load workers",
-      );
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Failed to load workers";
+      _showMessage(message);
     } catch (e) {
       _showMessage("Failed to load workers: $e");
     } finally {
-      if (mounted) setState(() => _isLoadingWorkers = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingWorkers = false;
+        });
+      }
     }
   }
 
   String _resolveMainJob(List<String> skills) {
-    final n = skills.map((e) => e.toLowerCase().trim()).toList();
-    if (n.contains('plumbing')) return 'Plumber';
-    if (n.contains('electricity') || n.contains('electrical'))
+    final normalized = skills.map((e) => e.toLowerCase().trim()).toList();
+
+    if (normalized.contains('plumbing')) return 'Plumber';
+    if (normalized.contains('electricity') || normalized.contains('electrical')) {
       return 'Electrician';
-    if (n.contains('painting')) return 'Painter';
-    if (n.contains('cleaning')) return 'Cleaner';
-    if (n.contains('carpentry')) return 'Carpenter';
+    }
+    if (normalized.contains('painting')) return 'Painter';
+    if (normalized.contains('cleaning')) return 'Cleaner';
+    if (normalized.contains('carpentry')) return 'Carpenter';
+
     return 'Worker';
   }
 
   void _applyLocalSort() {
     if (_activeSort == 'distance') {
       _allWorkers.sort((a, b) {
-        final cmp = (a["distanceValue"] as num).compareTo(
-          b["distanceValue"] as num,
-        );
+        final cmp =
+            (a["distanceValue"] as num).compareTo(b["distanceValue"] as num);
         return _distanceAscending ? cmp : -cmp;
       });
     } else if (_activeSort == 'rating') {
@@ -345,14 +366,15 @@ class _WorkerMapPageState extends State<WorkerMapPage>
 
   List<Map<String, dynamic>> get _visibleWorkers {
     List<Map<String, dynamic>> result = List.from(_allWorkers);
+
     final search = _searchController.text.trim().toLowerCase();
     if (search.isNotEmpty) {
-      result = result
-          .where(
-            (w) => (w["name"] ?? "").toString().toLowerCase().contains(search),
-          )
-          .toList();
+      result = result.where((worker) {
+        final name = (worker["name"] ?? "").toString().toLowerCase();
+        return name.contains(search);
+      }).toList();
     }
+
     return result;
   }
 
@@ -360,12 +382,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E40AF),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -376,6 +393,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       _distanceAscending = true;
       _ratingDescending = true;
     });
+
     await _fetchWorkers();
   }
 
@@ -388,6 +406,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
         _distanceAscending = true;
       }
     });
+
     await _fetchWorkers();
   }
 
@@ -400,10 +419,10 @@ class _WorkerMapPageState extends State<WorkerMapPage>
         _ratingDescending = true;
       }
     });
+
     await _fetchWorkers();
   }
 
-  // ── Map or placeholder ──
   Widget _buildMapOrPlaceholder(List<Map<String, dynamic>> visibleWorkers) {
     if (_useMap) {
       return FlutterMap(
@@ -419,7 +438,8 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           TileLayer(
             urlTemplate: AppMapConfig.tileUrl,
             userAgentPackageName: AppMapConfig.userAgent,
-            tileProvider: FMTCStore(AppMapConfig.storeName).getTileProvider(),
+            tileProvider:
+                FMTCStore(AppMapConfig.storeName).getTileProvider(),
           ),
           MarkerLayer(
             markers: [
@@ -430,13 +450,16 @@ class _WorkerMapPageState extends State<WorkerMapPage>
                 child: _userPin(),
               ),
               ...visibleWorkers
-                  .where((w) => w["lat"] != 0 && w["lng"] != 0)
+                  .where((worker) => worker["lat"] != 0 && worker["lng"] != 0)
                   .map(
-                    (w) => Marker(
-                      point: LatLng(w["lat"] as double, w["lng"] as double),
+                    (worker) => Marker(
+                      point: LatLng(
+                        worker["lat"] as double,
+                        worker["lng"] as double,
+                      ),
                       width: 44,
                       height: 44,
-                      child: _workerPin(w["job"] as String),
+                      child: _workerPin(worker["job"] as String),
                     ),
                   ),
             ],
@@ -445,15 +468,15 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       );
     }
 
-    // Dark navy placeholder to match theme
     return Container(
-      color: const Color(0xFF0D1F3C),
+      color: Colors.white,
       alignment: Alignment.center,
-      child: Text(
-        "Map view",
-        style: GoogleFonts.inter(
-          fontSize: 14,
-          color: const Color(0xFFB4D2FF).withOpacity(0.3),
+      child: const Text(
+        "Map disabled for now",
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Colors.black54,
         ),
       ),
     );
@@ -463,128 +486,29 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     final visibleWorkers = _visibleWorkers;
 
     if (_isLoadingUserLocation && _userLat == null && _userLng == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF1E40AF)),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
+
     if (_userLat == null || _userLng == null) {
-      return Center(
-        child: Text(
-          "Could not load user location",
-          style: GoogleFonts.inter(color: const Color(0xFF94A3B8)),
-        ),
+      return const Center(
+        child: Text("Could not load user location"),
       );
     }
 
     return Stack(
       children: [
-        // ── Map fills the full screen behind everything ──
-        Positioned.fill(child: _buildMapOrPlaceholder(visibleWorkers)),
-
-        // ── Top bar: search + notification icon ──
+        Positioned.fill(
+          child: _buildMapOrPlaceholder(visibleWorkers),
+        ),
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                // Search row
-                Row(
-                  children: [
-                    // Search bar
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF112244).withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: const Color(0xFF63B3FF).withOpacity(0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFF94A3B8),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: Colors.white,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: "Search worker by name",
-                                  hintStyle: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: const Color(
-                                      0xFFB4D2FF,
-                                    ).withOpacity(0.45),
-                                  ),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                            if (_searchController.text.isNotEmpty)
-                              GestureDetector(
-                                onTap: () {
-                                  _searchController.clear();
-                                  setState(() {});
-                                },
-                                child: const Icon(
-                                  Icons.close_rounded,
-                                  color: Color(0xFF94A3B8),
-                                  size: 18,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Notification / profile icon button
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF112244).withOpacity(0.92),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: const Color(0xFF63B3FF).withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () {
-                          setState(() => _selectedIndex = 4);
-                        },
-                        icon: const Icon(
-                          Icons.favorite_rounded,
-                          color: Color(0xFF63B3FF),
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // Location button
-                _locationButton(),
-
+                _searchBar(),
                 const SizedBox(height: 12),
-
+                _locationButton(),
+                const SizedBox(height: 16),
                 if (_useMap)
                   Align(
                     alignment: Alignment.centerRight,
@@ -594,8 +518,6 @@ class _WorkerMapPageState extends State<WorkerMapPage>
             ),
           ),
         ),
-
-        // ── Draggable bottom sheet ──
         DraggableScrollableSheet(
           initialChildSize: 0.45,
           minChildSize: 0.35,
@@ -603,191 +525,134 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                color: Color(0xFFF5F7FA),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
               ),
               child: Column(
                 children: [
-                  // Handle
                   const SizedBox(height: 10),
                   Container(
-                    width: 40,
-                    height: 4,
+                    width: 44,
+                    height: 5,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  const SizedBox(height: 14),
-
-                  // Category chips
+                  const SizedBox(height: 12),
                   SizedBox(
-                    height: 40,
+                    height: 44,
                     child: ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
-                      itemCount: categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (_, i) => _chip(categories[i]),
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemCount: categories.length,
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Sort buttons
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        // Rating sort
                         Expanded(
-                          child: GestureDetector(
-                            onTap: _onSortRating,
-                            child: Container(
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: _activeSort == 'rating'
-                                    ? const Color(0xFF1E40AF)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
+                          child: ElevatedButton(
+                            onPressed: _onSortRating,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _activeSort == 'rating'
+                                  ? const Color(0xFFEBF5FF)
+                                  : Colors.white,
+                              foregroundColor: _activeSort == 'rating'
+                                  ? const Color(0xFF2563EB)
+                                  : Colors.black87,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
                                   color: _activeSort == 'rating'
-                                      ? const Color(0xFF1E40AF)
-                                      : const Color(0xFFDBEAFE),
-                                  width: 1.5,
+                                      ? const Color(0xFF2563EB)
+                                      : Colors.black12,
                                 ),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "Rating",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: _activeSort == 'rating'
-                                          ? Colors.white
-                                          : const Color(0xFF94A3B8),
-                                    ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text("Rating"),
+                                if (_activeSort == 'rating') ...[
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    _ratingDescending
+                                        ? Icons.arrow_downward
+                                        : Icons.arrow_upward,
+                                    size: 16,
                                   ),
-                                  if (_activeSort == 'rating') ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      _ratingDescending
-                                          ? Icons.arrow_downward_rounded
-                                          : Icons.arrow_upward_rounded,
-                                      size: 14,
-                                      color: Colors.white,
-                                    ),
-                                  ],
                                 ],
-                              ),
+                              ],
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 10),
-
-                        // Distance sort
                         Expanded(
-                          child: GestureDetector(
-                            onTap: _onSortDistance,
-                            child: Container(
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: _activeSort == 'distance'
-                                    ? const Color(0xFF1E40AF)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
+                          child: ElevatedButton(
+                            onPressed: _onSortDistance,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _activeSort == 'distance'
+                                  ? const Color(0xFFEBF5FF)
+                                  : Colors.white,
+                              foregroundColor: _activeSort == 'distance'
+                                  ? const Color(0xFF2563EB)
+                                  : Colors.black87,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
                                   color: _activeSort == 'distance'
-                                      ? const Color(0xFF1E40AF)
-                                      : const Color(0xFFDBEAFE),
-                                  width: 1.5,
+                                      ? const Color(0xFF2563EB)
+                                      : Colors.black12,
                                 ),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "Distance",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: _activeSort == 'distance'
-                                          ? Colors.white
-                                          : const Color(0xFF94A3B8),
-                                    ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text("Distance"),
+                                if (_activeSort == 'distance') ...[
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    _distanceAscending
+                                        ? Icons.arrow_upward
+                                        : Icons.arrow_downward,
+                                    size: 16,
                                   ),
-                                  if (_activeSort == 'distance') ...[
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      _distanceAscending
-                                          ? Icons.arrow_upward_rounded
-                                          : Icons.arrow_downward_rounded,
-                                      size: 14,
-                                      color: Colors.white,
-                                    ),
-                                  ],
                                 ],
-                              ),
+                              ],
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Worker list
                   Expanded(
                     child: _isLoadingWorkers
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFF1E40AF),
-                            ),
-                          )
+                        ? const Center(child: CircularProgressIndicator())
                         : visibleWorkers.isEmpty
-                        ? Center(
-                            child: Text(
-                              "No workers found",
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                color: const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          )
-                        : AnimatedBuilder(
-                            animation: _animController,
-                            builder: (context, _) {
-                              return ListView.separated(
-                                controller: scrollController,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                            ? const Center(
+                                child: Text(
+                                  "No workers found",
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                                itemCount: visibleWorkers.length,
+                              )
+                            : ListView.separated(
+                                controller: scrollController,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemBuilder: (_, i) =>
+                                    WorkerCard(worker: visibleWorkers[i]),
                                 separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (_, i) {
-                                  if (i >= _slideAnimations.length) {
-                                    return WorkerCard(
-                                      worker: visibleWorkers[i],
-                                    );
-                                  }
-                                  return FadeTransition(
-                                    opacity: _fadeAnimations[i],
-                                    child: SlideTransition(
-                                      position: _slideAnimations[i],
-                                      child: WorkerCard(
-                                        worker: visibleWorkers[i],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
+                                    const SizedBox(height: 12),
+                                itemCount: visibleWorkers.length,
+                              ),
                   ),
                 ],
               ),
@@ -818,95 +683,71 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      
-      backgroundColor: const Color(0xFFEFF6FF),
+      backgroundColor: const Color(0xFFF5F7FA),
       body: _buildCurrentPage(),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _selectedIndex,
-          selectedItemColor: const Color(0xFF1E40AF),
-          unselectedItemColor: const Color(0xFF94A3B8),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedLabelStyle: GoogleFonts.inter(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _selectedIndex,
+        selectedItemColor: const Color(0xFF2563EB),
+        unselectedItemColor: Colors.black45,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            label: "Home",
           ),
-          unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
-          onTap: (index) => setState(() => _selectedIndex = index),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home_rounded),
-              label: "Home",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.description_outlined),
-              activeIcon: Icon(Icons.description_rounded),
-              label: "Requests",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline_rounded),
-              activeIcon: Icon(Icons.chat_bubble_rounded),
-              label: "Chat",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.smart_toy_outlined),
-              activeIcon: Icon(Icons.smart_toy_rounded),
-              label: "AI",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: "Profile",
-            ),
-          ],
-        ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.request_page),
+            label: "My requests",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat),
+            label: "Chat",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.smart_toy_outlined),
+            label: "AI",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: "Profile",
+          ),
+        ],
       ),
     );
   }
 
-  // ── Sub-widgets ──
-
   Widget _locationButton() {
     return SizedBox(
       width: double.infinity,
-      height: 46,
+      height: 48,
       child: ElevatedButton.icon(
         onPressed: _isGettingLocation ? null : _getCurrentLocation,
         icon: _isGettingLocation
             ? const SizedBox(
-                width: 16,
-                height: 16,
+                width: 18,
+                height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   color: Colors.white,
                 ),
               )
-            : const Icon(
-                Icons.my_location_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
+            : const Icon(Icons.my_location, color: Colors.white),
         label: Text(
           _isGettingLocation
-              ? "Getting location..."
+              ? "Getting Location..."
               : "Use My Current Location",
-          style: GoogleFonts.inter(
+          style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,
-            fontSize: 14,
           ),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1E40AF),
-          disabledBackgroundColor: const Color(0xFF1E40AF).withOpacity(0.5),
-          elevation: 0,
+          backgroundColor: const Color(0xFF2563EB),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -915,76 +756,47 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     );
   }
 
-  Widget _chip(Category category) {
-    final bool selected = _selectedSkill == category.apiSkill;
-    return GestureDetector(
-      onTap: () => _onCategoryTap(category),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1E40AF) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? const Color(0xFF1E40AF) : const Color(0xFFDBEAFE),
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              category.key,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : const Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Image.asset(
-              category.value,
-              width: 16,
-              height: 16,
-              fit: BoxFit.contain,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _workerPin(String job) {
     IconData icon;
     Color color;
+
     switch (job.toLowerCase()) {
       case 'plumber':
         icon = Icons.plumbing;
-        color = const Color(0xFF1E40AF);
+        color = Colors.blue;
         break;
       case 'electrician':
         icon = Icons.electrical_services;
-        color = const Color(0xFFF59E0B);
+        color = Colors.amber;
         break;
       case 'painter':
         icon = Icons.format_paint;
-        color = const Color(0xFF7C3AED);
+        color = Colors.purple;
         break;
       case 'cleaner':
         icon = Icons.cleaning_services;
-        color = const Color(0xFF059669);
+        color = Colors.green;
         break;
       case 'carpenter':
         icon = Icons.handyman;
-        color = const Color(0xFF92400E);
+        color = Colors.brown;
         break;
       default:
         icon = Icons.person_pin_circle;
-        color = const Color(0xFF94A3B8);
+        color = Colors.grey;
     }
+
     return Container(
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Icon(icon, color: Colors.white, size: 22),
     );
@@ -993,10 +805,57 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   Widget _userPin() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFE24B4A),
+        color: Colors.red,
         borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: const Icon(Icons.person_pin_circle, color: Colors.white, size: 22),
+    );
+  }
+
+  Widget _searchBar() {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: Colors.black54),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: "Search worker by name",
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              _searchController.clear();
+              setState(() {});
+            },
+            icon: const Icon(Icons.close, color: Colors.black45),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1004,33 +863,71 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     return Container(
       width: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF112244).withOpacity(0.9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF63B3FF).withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            icon: const Icon(Icons.add, color: Colors.white, size: 20),
+            icon: const Icon(Icons.add, color: Colors.black87),
             onPressed: () => _mapController.move(
               _mapController.camera.center,
               _mapController.camera.zoom + 1,
             ),
           ),
-          Container(
-            height: 1,
-            width: 28,
-            color: const Color(0xFF63B3FF).withOpacity(0.2),
-          ),
+          Container(height: 1, width: 32, color: Colors.black12),
           IconButton(
-            icon: const Icon(Icons.remove, color: Colors.white, size: 20),
+            icon: const Icon(Icons.remove, color: Colors.black87),
             onPressed: () => _mapController.move(
               _mapController.camera.center,
               _mapController.camera.zoom - 1,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _chip(Category category) {
+    final bool selected = _selectedSkill == category.apiSkill;
+
+    return InkWell(
+      onTap: () => _onCategoryTap(category),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEBF5FF) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected ? const Color(0xFF2563EB) : Colors.black12,
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              category.key,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected ? const Color(0xFF2563EB) : Colors.black87,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Image.asset(
+              category.value,
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1041,6 +938,7 @@ class Category {
   final String value;
   final String? apiSkill;
   final String workerType;
+
   const Category({
     required this.key,
     required this.value,
