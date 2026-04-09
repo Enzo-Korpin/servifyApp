@@ -6,7 +6,7 @@ import PendingUser from "../models/PendingUser.js";
 import WorkerProfile from "../models/workerProfile.js";
 import cloudinary from "../lib/cloudinary.js";
 import { generateVerificationCode } from "../utils/generateVerficationCode.js";
-import { generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.js";
+import { clearTokenCookieOptions, generateTokenAndSetCookie } from "../utils/generateTokenAndSetCookie.js";
 import { sendVerificationEmail, sendWelcomeEmail } from "../mailtrap/emails.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
@@ -141,6 +141,12 @@ export const loginUser = asyncHandler(async (req, res) => {
   safeUser.password = undefined;
   return res.status(200).json({ success: true, data: safeUser, error: null });
 });
+
+export const logoutUser = asyncHandler(async (req, res) => {
+  res.clearCookie("token", clearTokenCookieOptions);
+
+  return res.status(200).json({ success: true, data: null, error: null });
+  });
 
 export const verifyEmail = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
