@@ -52,7 +52,6 @@ export const signupUser = asyncHandler(async (req, res) => {
     const verificationCode = generateVerificationCode();
 
     const verificationCodeHash = hashCode(verificationCode);
-    
 
     let imageUrl;
     if (image) {
@@ -293,4 +292,92 @@ export const checkAuth = asyncHandler(async (req, res) => {
   const safeUser = req.user.toObject();
   safeUser.password = undefined;
   return res.status(200).json({ success: true, data: safeUser, error: null });
+});
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        message:
+          "If an account with that email exists, a reset link has been sent.",
+      },
+      error: null,
+    });
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashCode(rawToken);
+
+  user.resetPasswordTokenHash = tokenHash;
+  user.resetPasswordTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  await user.save();
+
+  const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
+
+  sendResetPasswordEmail(user.email, resetLink).catch(console.error);
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      message:
+        "If an account with that email exists, a reset link has been sent.",
+    },
+    error: null,
+  });
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword, confirmPassword } = req.body;
+
+  if (!token) {
+    throw new BadRequestError("Reset token is required", "MISSING_RESET_TOKEN");
+  }
+
+  if (!newPassword || !confirmPassword) {
+    throw new BadRequestError(
+      "New password and confirm password are required",
+      "MISSING_PASSWORD_FIELDS",
+    );
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new BadRequestError(
+      "Passwords do not match",
+      "PASSWORDS_DO_NOT_MATCH",
+    );
+  }
+
+  const tokenHash = hashCode(token);
+
+  const user = await User.findOne({
+    resetPasswordTokenHash: tokenHash,
+    resetPasswordTokenExpiresAt: { $gt: new Date() },
+  });
+
+  if (!user) {
+    throw new BadRequestError(
+      "Invalid or expired reset token",
+      "INVALID_OR_EXPIRED_RESET_TOKEN",
+    );
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  user.resetPasswordTokenHash = null;
+  user.resetPasswordTokenExpiresAt = null;
+
+  await user.save();
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      message: "Password has been reset successfully. Please log in again.",
+    },
+    error: null,
+  });
 });

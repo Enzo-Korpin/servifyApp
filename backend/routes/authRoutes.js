@@ -5,6 +5,8 @@ import {
   verifyEmail,
   checkAuth,
   resendVerificationCode,
+  forgotPassword,
+  resetPassword,
 } from "../service/authService.js";
 
 import { loginValidation } from "../middleware/loginValidation.js";
@@ -34,5 +36,9 @@ router.post(
 );
 
 router.get("/check-auth", protectRoute, checkAuth);
+
+router.post("/forgot-password", arcjetProtection, forgotPassword);
+
+router.post("/reset-password/", arcjetProtection, resetPassword);
 
 export default router;
