@@ -3,6 +3,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:frontend/Access/login_screens/select_type.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/Access/verification/reset_password.dart';
+import 'package:frontend/Access/verification/forgot_password.dart';
+
+
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/profiles/profile_worker.dart';
+import 'package:frontend/Follow/Follow_service.dart';
 import 'Worker_Follow_card.dart';
 
 class FollowedWorkersPage extends StatefulWidget {
@@ -9,63 +12,91 @@ class FollowedWorkersPage extends StatefulWidget {
 }
 
 class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
-  final TextEditingController _searchController = TextEditingController();
+  final FollowService _followService = FollowService();
 
-  List<Map<String, dynamic>> followedWorkers = [
-    {
-      "name": "Anas",
-      "profession": "Plumber",
-      "distance": 0.0,
-      "rating": 4.0,
-      "imageUrl": "",
-    },
-    {
-      "name": "Karam Naser",
-      "profession": "Cleaner",
-      "distance": 3.2,
-      "rating": 4.3,
-      "imageUrl": "",
-    },
-    {
-      "name": "Ahmad Ali",
-      "profession": "Electrician",
-      "distance": 1.7,
-      "rating": 4.8,
-      "imageUrl": "",
-    },
-  ];
+  bool _isLoading = true;
+  String? _error;
 
-  String search = "";
+  List<Map<String, dynamic>> followedWorkers = [];
 
-  List<Map<String, dynamic>> get filteredWorkers {
-    if (search.trim().isEmpty) return followedWorkers;
-
-    return followedWorkers.where((worker) {
-      final name = worker["name"].toString().toLowerCase();
-      final profession = worker["profession"].toString().toLowerCase();
-      final query = search.toLowerCase();
-
-      return name.contains(query) || profession.contains(query);
-    }).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowingWorkers();
   }
 
-  void _unfollowWorker(int indexInOriginalList) {
+  Future<void> _loadFollowingWorkers() async {
     setState(() {
-      followedWorkers.removeAt(indexInOriginalList);
+      _isLoading = true;
+      _error = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Worker unfollowed"),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      final workers = await _followService.getFollowingWorkers();
+
+      if (!mounted) return;
+      setState(() {
+        followedWorkers = workers;
+        _isLoading = false;
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error =
+            e.response?.data?["message"]?.toString() ??
+            e.response?.data?["error"]?.toString() ??
+            "Failed to load followed workers";
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = "Failed to load followed workers";
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _unfollowWorker(String workerId) async {
+    try {
+      await _followService.unfollowWorker(workerId);
+
+      if (!mounted) return;
+      setState(() {
+        followedWorkers.removeWhere((worker) => worker["workerId"] == workerId);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Worker unfollowed"),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Failed to unfollow";
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to unfollow"),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     const Color darkBlue = Color(0xFF08214A);
-    const Color midBlue = Color(0xFF102C63);
     const Color primaryBlue = Color(0xFF2948B8);
     const Color sheetColor = Color(0xFFEAF0F7);
 
@@ -79,13 +110,27 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Followed Workers",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Expanded(
+                        child: Text(
+                          "Followed Workers",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -96,43 +141,9 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 18),
-
-                  Container(
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: midBlue,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.12),
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: Colors.white),
-                      onChanged: (value) {
-                        setState(() {
-                          search = value;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: "Search followed workers",
-                        hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.45),
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: Colors.white.withOpacity(0.6),
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -155,7 +166,6 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-
                     Row(
                       children: [
                         Container(
@@ -168,7 +178,7 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Text(
-                            "${filteredWorkers.length} Workers",
+                            "${followedWorkers.length} Workers",
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -188,41 +198,76 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-
                     Expanded(
-                      child: filteredWorkers.isEmpty
-                          ? const Center(
-                              child: Text(
-                                "No followed workers found",
-                                style: TextStyle(
-                                  color: Color(0xFF7C879A),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: filteredWorkers.length,
-                              itemBuilder: (context, index) {
-                                final worker = filteredWorkers[index];
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _error != null
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        _error!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Color(0xFF7C879A),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ElevatedButton(
+                                        onPressed: _loadFollowingWorkers,
+                                        child: const Text("Retry"),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : followedWorkers.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        "No followed workers yet",
+                                        style: TextStyle(
+                                          color: Color(0xFF7C879A),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: followedWorkers.length,
+                                      itemBuilder: (context, index) {
+                                        final worker = followedWorkers[index];
 
-                                final originalIndex = followedWorkers.indexOf(worker);
+                                        return FollowedWorkerCard(
+                                          name: worker["name"] ?? "",
+                                          profession:
+                                              worker["profession"] ?? "Worker",
+                                          distanceKm:
+                                              ((worker["distance"] ?? 0) as num)
+                                                  .toDouble(),
+                                          rating:
+                                              ((worker["rating"] ?? 0) as num)
+                                                  .toDouble(),
+                                          imageUrl: worker["imageUrl"],
+                                          onView: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ProfileWorker(
+                                                  workerId: worker["workerId"],
+                                                ),
+                                              ),
+                                            );
 
-                                return FollowedWorkerCard(
-                                  name: worker["name"],
-                                  profession: worker["profession"],
-                                  distanceKm: worker["distance"],
-                                  rating: worker["rating"],
-                                  imageUrl: worker["imageUrl"],
-                                  onView: () {
-                                    // put your navigation here
-                                  },
-                                  onUnfollow: () {
-                                    _unfollowWorker(originalIndex);
-                                  },
-                                );
-                              },
-                            ),
+                                            _loadFollowingWorkers();
+                                          },
+                                          onUnfollow: () {
+                                            _unfollowWorker(worker["workerId"]);
+                                          },
+                                        );
+                                      },
+                                    ),
                     ),
                   ],
                 ),

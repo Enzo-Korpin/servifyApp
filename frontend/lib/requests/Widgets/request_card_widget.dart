@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-// import '../models/request_model.dart';
 import '../../models/request_model.dart';
+
 class RequestCardWidget extends StatelessWidget {
   final RequestModel request;
+  final VoidCallback? onCancel;
 
   const RequestCardWidget({
     super.key,
     required this.request,
+    this.onCancel,
   });
 
   Color _statusColor(String status) {
@@ -50,9 +52,12 @@ class RequestCardWidget extends StatelessWidget {
     return '$day/$month/$year  $hour:$minute';
   }
 
+  bool get _canCancel => request.status.toLowerCase() == 'pending';
+
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor(request.status);
+    final status = request.status.toLowerCase();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -131,6 +136,112 @@ class RequestCardWidget extends StatelessWidget {
               ),
             ],
           ),
+
+          if (status == 'rejected' && request.rejectedAt != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.event_busy, size: 16, color: Colors.red.shade400),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Rejected at: ${_formatDate(request.rejectedAt!)}',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (status == 'rejected' &&
+              request.rejectReason != null &&
+              request.rejectReason!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.notes_rounded, size: 16, color: Colors.red.shade400),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Reject reason: ${request.rejectReason!}',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (status == 'cancelled' && request.cancelledAt != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.event_busy, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Cancelled at: ${_formatDate(request.cancelledAt!)}',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (status == 'cancelled' &&
+              request.cancelReason != null &&
+              request.cancelReason!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.notes_rounded, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Cancel reason: ${request.cancelReason!}',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (_canCancel) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onCancel,
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('Cancel Request'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade200),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

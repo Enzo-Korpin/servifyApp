@@ -45,6 +45,22 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    resetPasswordCodeHash: {
+      type: String,
+      default: null,
+    },
+    resetPasswordCodeExpiry: {
+      type: Date,
+      default: null,
+    },
+    resetPasswordResendCount: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordLastSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

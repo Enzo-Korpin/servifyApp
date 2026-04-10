@@ -1,43 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/Access/verification/reset_password.dart';
 
-class VerificationCodeScreen extends StatefulWidget {
-  /// The email/phone the code was sent to — shown as a hint.
-  final String sentTo;
+class VerifyResetCodeScreen extends StatefulWidget {
+  final String email;
 
-  const VerificationCodeScreen({
+  const VerifyResetCodeScreen({
     super.key,
-    this.sentTo = '',
+    required this.email,
   });
 
   @override
-  State<VerificationCodeScreen> createState() =>
-      _VerificationCodeScreenState();
+  State<VerifyResetCodeScreen> createState() => _VerifyResetCodeScreenState();
 }
 
-class _VerificationCodeScreenState extends State<VerificationCodeScreen>
+class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
     with SingleTickerProviderStateMixin {
-  // 6 separate controllers + focus nodes
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes =
       List.generate(6, (_) => FocusNode());
 
-  // ── Entrance animation ──
-  late AnimationController _animController;
-  late Animation<double>   _headerFade;
-  late Animation<Offset>   _headerSlide;
-  late Animation<double>   _formFade;
-  late Animation<Offset>   _formSlide;
+  bool _isLoading = false;
+  bool _isResending = false;
 
-  // ── Theme colours ──
-  static const _navyDark   = Color(0xFF0A1628);
-  static const _navyMid    = Color(0xFF1E40AF);
-  static const _bgLight    = Color(0xFFEFF6FF);
-  static const _borderBlue = Color(0xFFDBEAFE);
-  static const _textDark   = Color(0xFF1E293B);
-  static const _textMuted  = Color(0xFF94A3B8);
+  late AnimationController _animController;
+  late Animation<double> _headerFade;
+  late Animation<Offset> _headerSlide;
+  late Animation<double> _formFade;
+  late Animation<Offset> _formSlide;
+
+  static const Color _navyDark = Color(0xFF0A1628);
+  static const Color _navyMid = Color(0xFF1E40AF);
+  static const Color _bgLight = Color(0xFFEFF6FF);
+  static const Color _borderBlue = Color(0xFFDBEAFE);
+  static const Color _textDark = Color(0xFF1E293B);
+  static const Color _textMuted = Color(0xFF94A3B8);
 
   @override
   void initState() {
@@ -54,6 +55,7 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
         curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
+
     _headerSlide = Tween<Offset>(
       begin: const Offset(0, -0.05),
       end: Offset.zero,
@@ -63,12 +65,14 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
         curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
+
     _formFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animController,
         curve: const Interval(0.35, 1.0, curve: Curves.easeOut),
       ),
     );
+
     _formSlide = Tween<Offset>(
       begin: const Offset(0, 0.07),
       end: Offset.zero,
@@ -85,66 +89,162 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
   @override
   void dispose() {
     _animController.dispose();
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes)  f.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
-  // Returns the full 6-digit code as a string
-  String get _fullCode =>
-      _controllers.map((c) => c.text).join();
+  String get _fullCode => _controllers.map((c) => c.text).join();
 
-  void _showSnack(String message, {bool isError = true}) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.inter()),
-        backgroundColor:
-            isError ? const Color(0xFFE24B4A) : _navyMid,
+        content: Text(
+          message,
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: isError ? const Color(0xFFE24B4A) : _navyMid,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
     );
   }
 
-  void _onVerifyPressed() {
-    final code = _fullCode;
-    if (code.length < 6) {
-      _showSnack("Please enter the complete 6-digit code");
+  Future<void> _verifyCode() async {
+    final code = _fullCode.trim();
+
+    if (code.isEmpty) {
+      _showMessage("Please enter the verification code");
       return;
     }
-    // ── Hook your verification logic here ──
-    _showSnack("Code verified: $code", isError: false);
+
+    if (code.length != 6) {
+      _showMessage("Code must be 6 digits");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await DioClient.dio.post(
+        '/api/auth/verify-reset-code',
+        data: {
+          "email": widget.email,
+          "code": code,
+        },
+      );
+
+      debugPrint("VERIFY RESET STATUS: ${response.statusCode}");
+      debugPrint("VERIFY RESET BODY: ${response.data}");
+
+      if (response.statusCode == 200) {
+        _showMessage(
+          "Code verified successfully",
+          isError: false,
+        );
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(
+              email: widget.email,
+              code: code,
+            ),
+          ),
+        );
+      } else {
+        _showMessage("Invalid or expired verification code");
+      }
+    } on DioException catch (e) {
+      debugPrint("VERIFY RESET ERROR: ${e.response?.data}");
+
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Invalid or expired verification code";
+
+      _showMessage(message);
+    } catch (e) {
+      _showMessage("Verification failed: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  void _onResendPressed() {
-    // ── Hook your resend logic here ──
-    _showSnack("Verification code resent", isError: false);
+  Future<void> _resendCode() async {
+    setState(() {
+      _isResending = true;
+    });
+
+    try {
+      final response = await DioClient.dio.post(
+        '/api/auth/forgot-password',
+        data: {
+          "email": widget.email,
+        },
+      );
+
+      debugPrint("RESEND RESET CODE STATUS: ${response.statusCode}");
+      debugPrint("RESEND RESET CODE BODY: ${response.data}");
+
+      _showMessage(
+        "Verification code sent again",
+        isError: false,
+      );
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Failed to resend code";
+
+      _showMessage(message);
+    } catch (e) {
+      _showMessage("Failed to resend code: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResending = false;
+        });
+      }
+    }
   }
 
-  // ── Single OTP digit field ──
   Widget _buildDigitField(int index) {
     return SizedBox(
       width: 46,
       height: 56,
       child: TextField(
-        controller:    _controllers[index],
-        focusNode:     _focusNodes[index],
-        textAlign:     TextAlign.center,
-        keyboardType:  TextInputType.number,
-        maxLength:     1,
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        maxLength: 1,
         style: GoogleFonts.inter(
-          fontSize:   22,
+          fontSize: 22,
           fontWeight: FontWeight.w700,
-          color:      _textDark,
+          color: _textDark,
         ),
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: InputDecoration(
-          counterText: '',           // hides the "0/1" counter
-          filled:      true,
-          fillColor:   Colors.white,
+          counterText: '',
+          filled: true,
+          fillColor: Colors.white,
           contentPadding: EdgeInsets.zero,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
@@ -157,32 +257,32 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide:
-                const BorderSide(color: _navyMid, width: 2),
+            borderSide: const BorderSide(color: _navyMid, width: 2),
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide:
-                const BorderSide(color: _borderBlue, width: 1.5),
+            borderSide: const BorderSide(color: _borderBlue, width: 1.5),
           ),
         ),
         onChanged: (value) {
-          setState(() {}); // rebuild to update border colours
+          setState(() {});
 
           if (value.isNotEmpty && index < 5) {
-            // Move focus to next field
-            FocusScope.of(context)
-                .requestFocus(_focusNodes[index + 1]);
+            FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
           }
+
           if (value.isEmpty && index > 0) {
-            // Move focus back on delete
-            FocusScope.of(context)
-                .requestFocus(_focusNodes[index - 1]);
+            FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
           }
-          // Auto-submit when all 6 digits are entered
+
           if (_fullCode.length == 6) {
             FocusScope.of(context).unfocus();
           }
+        },
+        onTap: () {
+          _controllers[index].selection = TextSelection.fromPosition(
+            TextPosition(offset: _controllers[index].text.length),
+          );
         },
       ),
     );
@@ -194,7 +294,6 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
       backgroundColor: _bgLight,
       body: Column(
         children: [
-          // ── Dark navy header: Servify logo + name ──
           FadeTransition(
             opacity: _headerFade,
             child: SlideTransition(
@@ -205,11 +304,9 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(20, 12, 20, 36),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
                     child: Column(
                       children: [
-                        // Back button
                         Align(
                           alignment: Alignment.centerLeft,
                           child: GestureDetector(
@@ -218,13 +315,11 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF63B3FF)
-                                    .withOpacity(0.12),
-                                borderRadius:
-                                    BorderRadius.circular(10),
+                                color: const Color(0xFF63B3FF).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: const Color(0xFF63B3FF)
-                                      .withOpacity(0.2),
+                                  color:
+                                      const Color(0xFF63B3FF).withOpacity(0.2),
                                 ),
                               ),
                               child: const Icon(
@@ -235,21 +330,15 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 22),
-
-                        // Servify icon mark
                         Container(
                           width: 66,
                           height: 66,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF63B3FF)
-                                .withOpacity(0.15),
-                            borderRadius:
-                                BorderRadius.circular(20),
+                            color: const Color(0xFF63B3FF).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: const Color(0xFF63B3FF)
-                                  .withOpacity(0.3),
+                              color: const Color(0xFF63B3FF).withOpacity(0.3),
                               width: 1,
                             ),
                           ),
@@ -259,10 +348,7 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                             size: 30,
                           ),
                         ),
-
                         const SizedBox(height: 14),
-
-                        // App name
                         Text(
                           "Servify",
                           style: GoogleFonts.inter(
@@ -272,15 +358,13 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                             letterSpacing: -0.5,
                           ),
                         ),
-
                         const SizedBox(height: 5),
-
                         Text(
                           "Verification Code",
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: const Color(0xFFB4D2FF)
-                                .withOpacity(0.55),
+                            color:
+                                const Color(0xFFB4D2FF).withOpacity(0.55),
                           ),
                         ),
                       ],
@@ -290,8 +374,6 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
               ),
             ),
           ),
-
-          // ── Form section ──
           Expanded(
             child: FadeTransition(
               opacity: _formFade,
@@ -301,7 +383,6 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                   padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
                   child: Column(
                     children: [
-                      // Title + subtitle
                       Text(
                         "Enter the 6-digit code",
                         style: GoogleFonts.inter(
@@ -321,11 +402,10 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                           ),
                           children: [
                             const TextSpan(
-                                text: "We sent a verification code to\n"),
+                              text: "We sent a verification code to\n",
+                            ),
                             TextSpan(
-                              text: widget.sentTo.isNotEmpty
-                                  ? widget.sentTo
-                                  : "your registered email",
+                              text: widget.email,
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -335,25 +415,17 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 32),
-
-                      // ── 6 OTP digit fields ──
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: List.generate(
-                          6,
-                          (i) => _buildDigitField(i),
-                        ),
+                        children: List.generate(6, (i) => _buildDigitField(i)),
                       ),
-
                       const SizedBox(height: 32),
-
                       SizedBox(
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: _onVerifyPressed,
+                          onPressed: _isLoading ? null : _verifyCode,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _navyMid,
                             elevation: 0,
@@ -361,20 +433,26 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: Text(
-                            "Verify Code",
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Text(
+                                  "Verify Code",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Resend row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -386,9 +464,9 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen>
                             ),
                           ),
                           GestureDetector(
-                            onTap: _onResendPressed,
+                            onTap: (_isLoading || _isResending) ? null : _resendCode,
                             child: Text(
-                              "Resend",
+                              _isResending ? "Sending..." : "Resend",
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,

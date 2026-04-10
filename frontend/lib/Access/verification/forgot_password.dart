@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:dio/dio.dart';
+import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/Access/verification/verify_reset_code_screen.dart';
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
 
@@ -28,16 +30,26 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     super.dispose();
   }
 
-  Future<void> _sendVerificationCode() async {
-    if (!_formKey.currentState!.validate()) return;
+Future<void> _sendVerificationCode() async {
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isSending = true);
+  final email = _emailController.text.trim();
+  debugPrint("FORGOT PASSWORD EMAIL: [$email]");
 
-    await Future.delayed(const Duration(seconds: 2));
+  setState(() => _isSending = true);
+
+  try {
+    final response = await DioClient.dio.post(
+      '/api/auth/forgot-password',
+      data: {
+        "email": email,
+      },
+    );
+
+    debugPrint("FORGOT PASSWORD STATUS: ${response.statusCode}");
+    debugPrint("FORGOT PASSWORD BODY: ${response.data}");
 
     if (!mounted) return;
-
-    setState(() => _isSending = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -53,12 +65,54 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ),
     );
 
-    // put your API call here
-    // example:
-    // await DioClient.dio.post("/api/auth/forgot-password", data: {
-    //   "email": _emailController.text.trim(),
-    // });
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VerifyResetCodeScreen(email: email),
+      ),
+    );
+  } on DioException catch (e) {
+    final message =
+        e.response?.data?["message"]?.toString() ??
+        e.response?.data?["error"]?.toString() ??
+        "Failed to send verification code";
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.inter(),
+        ),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Failed to send verification code: $e",
+          style: GoogleFonts.inter(),
+        ),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isSending = false);
+    }
   }
+}
 
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? "";

@@ -25,6 +25,7 @@ class WorkerRequestService {
         "pending": (data["pending"] ?? 0) as int,
         "accepted": (data["accepted"] ?? 0) as int,
         "rejected": (data["rejected"] ?? 0) as int,
+        "cancelled": (data["cancelled"] ?? 0) as int,
       };
     } on DioException catch (e) {
       throw Exception(_extractErrorMessage(e));

@@ -7,11 +7,13 @@ import {
   updateCustomerProfile,
   getFilteredWorkers,
   searchWorkersByName,
+  searchFilteredWorkers,
   getLocation,
 } from "../service/customerService.js";
 import { filterValidation } from "../middleware/filterValidation.js";
 import { customerProfileValidation } from "../middleware/CustomerProfileValidation.js";
 import { searchTextValidation } from "../middleware/searchTextValidation.js";
+import { searchFilteredWorkersValidation } from "../middleware/searchFilteredWorkersValidation.js";
 
 const router = express.Router();
 
@@ -30,6 +32,13 @@ router.get(
   protectRoute,
   searchTextValidation,
   searchWorkersByName,
+);
+
+router.get(
+  "/search-filtered-workers",
+  protectRoute,
+  searchFilteredWorkersValidation,
+  searchFilteredWorkers,
 );
 
 router.get("/get-location", protectRoute, getLocation);

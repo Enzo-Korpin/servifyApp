@@ -31,41 +31,21 @@ class RequestService {
     );
   }
 
-  Future<PaginatedRequestsResponse> getCanceledRequests({
-    String? afterRejected,
-    String? afterCancelled,
-    int? limit,
+  Future<RequestModel> cancelServiceRequest(
+    String requestId, {
+    String? cancelReason,
   }) async {
-    final futures = await Future.wait([
-      getCustomerRequests(
-        status: 'rejected',
-        after: afterRejected,
-        limit: limit,
-      ),
-      getCustomerRequests(
-        status: 'cancelled',
-        after: afterCancelled,
-        limit: limit,
-      ),
-    ]);
+    final body = <String, dynamic>{
+      if (cancelReason != null && cancelReason.trim().isNotEmpty)
+        'cancelReason': cancelReason.trim(),
+    };
 
-    final rejectedResponse = futures[0];
-    final cancelledResponse = futures[1];
-
-    final merged = [
-      ...rejectedResponse.docs,
-      ...cancelledResponse.docs,
-    ];
-
-    merged.sort((a, b) {
-      final byDate = b.createdAt.compareTo(a.createdAt);
-      if (byDate != 0) return byDate;
-      return b.id.compareTo(a.id);
-    });
-
-    return PaginatedRequestsResponse(
-      docs: merged,
-      nextCursor: null,
+    final response = await DioClient.dio.put(
+      '/api/service-requests/$requestId/cancel',
+      data: body,
     );
+
+    final data = response.data['data'] as Map<String, dynamic>;
+    return RequestModel.fromJson(data);
   }
 }

@@ -86,7 +86,9 @@ class FollowedWorkerCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '$profession • ${distanceKm.toStringAsFixed(1)} km',
+                        distanceKm > 0
+                            ? '$profession • ${distanceKm.toStringAsFixed(1)} km'
+                            : profession,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

@@ -9,7 +9,6 @@ import '../Access/login_screens/Login_Screen.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/worker/worker_profile_screen.dart';
 
-// ── State helper (unchanged) ──
 class _StatusState {
   static const Object _unset = Object();
 
@@ -68,7 +67,6 @@ class _HomeWorkerState extends State<HomeWorker>
   late final AccountSwitchService _accountSwitchService;
   final ScrollController _scrollController = ScrollController();
 
-  // Entrance animation
   late AnimationController _entranceController;
   late Animation<double> _headerFade;
   late Animation<Offset> _headerSlide;
@@ -86,19 +84,28 @@ class _HomeWorkerState extends State<HomeWorker>
 
   String _selectedStatus = "pending";
 
-  Map<String, int> _stats = {"pending": 0, "accepted": 0, "rejected": 0};
+  Map<String, int> _stats = {
+    "pending": 0,
+    "accepted": 0,
+    "rejected": 0,
+    "cancelled": 0,
+  };
 
-  final List<String> _statuses = ["pending", "accepted", "rejected"];
+  final List<String> _statuses = [
+    "pending",
+    "accepted",
+    "rejected",
+    "cancelled",
+  ];
 
   late Map<String, _StatusState> _statusData;
 
-  // ── Theme colours ──
-  static const _navyDark   = Color(0xFF0A1628);
-  static const _navyMid    = Color(0xFF1E40AF);
-  static const _bgLight    = Color(0xFFEFF6FF);
+  static const _navyDark = Color(0xFF0A1628);
+  static const _navyMid = Color(0xFF1E40AF);
+  static const _bgLight = Color(0xFFEFF6FF);
   static const _borderBlue = Color(0xFFDBEAFE);
-  static const _textDark   = Color(0xFF1E293B);
-  static const _textMuted  = Color(0xFF94A3B8);
+  static const _textDark = Color(0xFF1E293B);
+  static const _textMuted = Color(0xFF94A3B8);
 
   @override
   void initState() {
@@ -107,12 +114,12 @@ class _HomeWorkerState extends State<HomeWorker>
     _accountSwitchService = AccountSwitchService();
 
     _statusData = {
-      "pending":  const _StatusState(),
+      "pending": const _StatusState(),
       "accepted": const _StatusState(),
       "rejected": const _StatusState(),
+      "cancelled": const _StatusState(),
     };
 
-    // ── Entrance animation (1.2s total) ──
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -124,6 +131,7 @@ class _HomeWorkerState extends State<HomeWorker>
         curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
       ),
     );
+
     _headerSlide = Tween<Offset>(
       begin: const Offset(0, -0.06),
       end: Offset.zero,
@@ -140,6 +148,7 @@ class _HomeWorkerState extends State<HomeWorker>
         curve: const Interval(0.25, 0.65, curve: Curves.easeOut),
       ),
     );
+
     _statsSlide = Tween<Offset>(
       begin: const Offset(0, 0.08),
       end: Offset.zero,
@@ -179,7 +188,10 @@ class _HomeWorkerState extends State<HomeWorker>
   }
 
   Future<void> _loadInitialData() async {
-    setState(() { _isInitialLoading = true; _globalError = null; });
+    setState(() {
+      _isInitialLoading = true;
+      _globalError = null;
+    });
 
     try {
       final results = await Future.wait([
@@ -190,9 +202,9 @@ class _HomeWorkerState extends State<HomeWorker>
       ]);
 
       final currentUser = results[0] as CurrentUserModel;
-      final stats       = results[1] as Map<String, int>;
-      final firstPage   = results[2] as PaginatedServiceRequestsResponse;
-      final authUser    = results[3] as AuthCheckUser;
+      final stats = results[1] as Map<String, int>;
+      final firstPage = results[2] as PaginatedServiceRequestsResponse;
+      final authUser = results[3] as AuthCheckUser;
 
       _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
         requests: firstPage.docs,
@@ -210,7 +222,6 @@ class _HomeWorkerState extends State<HomeWorker>
         _authUser = authUser;
       });
 
-      // Trigger entrance animation after data loads
       _entranceController.forward(from: 0);
     } catch (e) {
       setState(() => _globalError = e.toString());
@@ -258,9 +269,15 @@ class _HomeWorkerState extends State<HomeWorker>
 
   Future<void> _loadMore() async {
     final state = _currentStatusState;
-    if (_isInitialLoading || _isActionLoading || _isSwitchingAccount ||
-        state.isLoading || state.isLoadingMore ||
-        !state.hasMore || state.nextCursor == null) return;
+    if (_isInitialLoading ||
+        _isActionLoading ||
+        _isSwitchingAccount ||
+        state.isLoading ||
+        state.isLoadingMore ||
+        !state.hasMore ||
+        state.nextCursor == null) {
+      return;
+    }
 
     setState(() {
       _statusData[_selectedStatus] = state.copyWith(isLoadingMore: true);
@@ -268,13 +285,19 @@ class _HomeWorkerState extends State<HomeWorker>
 
     try {
       final response = await _service.getWorkerRequests(
-          status: _selectedStatus, after: state.nextCursor);
+        status: _selectedStatus,
+        after: state.nextCursor,
+      );
+
       if (!mounted) return;
 
       final ids = state.requests.map((e) => e.id).toSet();
       final merged = List<ServiceRequestModel>.from(state.requests);
+
       for (final item in response.docs) {
-        if (!ids.contains(item.id)) merged.add(item);
+        if (!ids.contains(item.id)) {
+          merged.add(item);
+        }
       }
 
       setState(() {
@@ -301,7 +324,10 @@ class _HomeWorkerState extends State<HomeWorker>
     final state = _currentStatusState;
     setState(() {
       _statusData[_selectedStatus] = state.copyWith(
-          isLoading: true, isLoadingMore: false, clearError: true);
+        isLoading: true,
+        isLoadingMore: false,
+        clearError: true,
+      );
     });
 
     try {
@@ -310,10 +336,11 @@ class _HomeWorkerState extends State<HomeWorker>
         _service.getWorkerRequests(status: _selectedStatus),
         _accountSwitchService.checkAuth(),
       ]);
+
       if (!mounted) return;
 
       setState(() {
-        _stats    = results[0] as Map<String, int>;
+        _stats = results[0] as Map<String, int>;
         _authUser = results[2] as AuthCheckUser;
         final response = results[1] as PaginatedServiceRequestsResponse;
         _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
@@ -353,13 +380,19 @@ class _HomeWorkerState extends State<HomeWorker>
 
   Future<void> _rejectRequest(String requestId) async {
     final controller = TextEditingController();
+
     final reason = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Reject Request",
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _textDark)),
+        title: Text(
+          "Reject Request",
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            color: _textDark,
+          ),
+        ),
         content: TextField(
           controller: controller,
           maxLines: 3,
@@ -386,8 +419,13 @@ class _HomeWorkerState extends State<HomeWorker>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Cancel",
-                style: GoogleFonts.inter(color: _textMuted, fontWeight: FontWeight.w600)),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.inter(
+                color: _textMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           GestureDetector(
             onTap: () => Navigator.pop(context, controller.text.trim()),
@@ -397,9 +435,13 @@ class _HomeWorkerState extends State<HomeWorker>
                 color: const Color(0xFFE24B4A),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text("Reject",
-                  style: GoogleFonts.inter(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
+              child: Text(
+                "Reject",
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -407,6 +449,7 @@ class _HomeWorkerState extends State<HomeWorker>
     );
 
     if (reason == null) return;
+
     setState(() => _isActionLoading = true);
     try {
       await _service.rejectRequest(requestId, rejectReason: reason);
@@ -425,11 +468,13 @@ class _HomeWorkerState extends State<HomeWorker>
     if (_authUser == null || _authUser!.role != "worker") return;
     final targetRole =
         _accountSwitchService.getTargetRole(_authUser!.currentRole);
+
     setState(() => _isSwitchingAccount = true);
 
     try {
       final newRole = await _accountSwitchService.switchRole(targetRole);
       if (!mounted) return;
+
       setState(() {
         _authUser = AuthCheckUser(
           id: _authUser!.id,
@@ -440,16 +485,20 @@ class _HomeWorkerState extends State<HomeWorker>
           image: _authUser!.image,
         );
       });
+
       _showSnack("Switched to $newRole account");
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on DioException catch (e) {
       if (!mounted) return;
-      _showSnack(e.response?.data?["error"]?["message"]?.toString() ??
-          e.response?.data?["message"]?.toString() ??
-          "Switch account failed");
+      _showSnack(
+        e.response?.data?["error"]?["message"]?.toString() ??
+            e.response?.data?["message"]?.toString() ??
+            "Switch account failed",
+      );
     } catch (e) {
       if (!mounted) return;
       _showSnack("Switch account failed: $e");
@@ -471,7 +520,6 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
-  // ── Dark navy top header ──
   Widget _buildNavyHeader() {
     return FadeTransition(
       opacity: _headerFade,
@@ -487,7 +535,6 @@ class _HomeWorkerState extends State<HomeWorker>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar + name row
                   Row(
                     children: [
                       InkWell(
@@ -496,7 +543,8 @@ class _HomeWorkerState extends State<HomeWorker>
                           final updated =
                               await Navigator.of(context).push<bool>(
                             MaterialPageRoute(
-                                builder: (_) => const WorkerProfileScreen()),
+                              builder: (_) => const WorkerProfileScreen(),
+                            ),
                           );
                           if (updated == true && mounted) {
                             await _loadInitialData();
@@ -550,21 +598,16 @@ class _HomeWorkerState extends State<HomeWorker>
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 18),
-
-                  // Switch account button
                   if (_authUser != null && _authUser!.role == "worker")
                     SizedBox(
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton.icon(
-                        onPressed:
-                            _isSwitchingAccount ? null : _switchAccount,
+                        onPressed: _isSwitchingAccount ? null : _switchAccount,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _navyMid,
-                          disabledBackgroundColor:
-                              _navyMid.withOpacity(0.5),
+                          disabledBackgroundColor: _navyMid.withOpacity(0.5),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -575,10 +618,15 @@ class _HomeWorkerState extends State<HomeWorker>
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
-                            : const Icon(Icons.swap_horiz_rounded,
-                                color: Colors.white, size: 20),
+                            : const Icon(
+                                Icons.swap_horiz_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                         label: Text(
                           _accountSwitchService
                               .getButtonText(_authUser!.currentRole),
@@ -599,26 +647,26 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
-  // ── Stat cards ──
   Widget _buildStatCards() {
     final configs = [
-      {"label": "Pending",  "key": "pending",  "color": Colors.black},
+      {"label": "Pending", "key": "pending", "color": Colors.black},
       {"label": "Accepted", "key": "accepted", "color": Colors.black},
       {"label": "Rejected", "key": "rejected", "color": Colors.black},
+      {"label": "Cancelled", "key": "cancelled", "color": Colors.black},
     ];
 
     return FadeTransition(
       opacity: _statsFade,
       child: SlideTransition(
         position: _statsSlide,
-        child: Row(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: configs.map((c) {
             final color = c["color"] as Color;
-            return Expanded(
+            return SizedBox(
+              width: (MediaQuery.of(context).size.width - 48) / 2,
               child: Container(
-                margin: EdgeInsets.only(
-                  right: c["key"] != "rejected" ? 8 : 0,
-                ),
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -656,7 +704,6 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
-  // ── Status tab chip ──
   Widget _buildStatusChip(String status) {
     final isSelected = _selectedStatus == status;
     final state = _statusData[status]!;
@@ -702,7 +749,6 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
-  // ── Section header (Requests label + tabs + showing row) ──
   Widget _buildRequestsSection() {
     return FadeTransition(
       opacity: _listFade,
@@ -719,22 +765,20 @@ class _HomeWorkerState extends State<HomeWorker>
             ),
           ),
           const SizedBox(height: 10),
-
-          // Status tabs
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                ..._statuses.map((s) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _buildStatusChip(s),
-                    )),
+                ..._statuses.map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildStatusChip(s),
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-
-          // Showing label + refresh
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -756,8 +800,11 @@ class _HomeWorkerState extends State<HomeWorker>
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(color: _borderBlue, width: 1.5),
                   ),
-                  child: const Icon(Icons.refresh_rounded,
-                      color: _navyMid, size: 16),
+                  child: const Icon(
+                    Icons.refresh_rounded,
+                    color: _navyMid,
+                    size: 16,
+                  ),
                 ),
               ),
             ],
@@ -768,7 +815,6 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
-  // ── List body ──
   Widget _buildBodyList() {
     final state = _currentStatusState;
 
@@ -790,7 +836,8 @@ class _HomeWorkerState extends State<HomeWorker>
       return const SliverFillRemaining(
         hasScrollBody: false,
         child: Center(
-            child: CircularProgressIndicator(color: _navyMid)),
+          child: CircularProgressIndicator(color: _navyMid),
+        ),
       );
     }
 
@@ -833,7 +880,8 @@ class _HomeWorkerState extends State<HomeWorker>
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                  child: CircularProgressIndicator(color: _navyMid)),
+                child: CircularProgressIndicator(color: _navyMid),
+              ),
             );
           }
 
@@ -844,7 +892,9 @@ class _HomeWorkerState extends State<HomeWorker>
                 child: Text(
                   "You're all caught up",
                   style: GoogleFonts.inter(
-                      fontSize: 12, color: _textMuted),
+                    fontSize: 12,
+                    color: _textMuted,
+                  ),
                 ),
               ),
             );
@@ -882,17 +932,24 @@ class _HomeWorkerState extends State<HomeWorker>
               child: Icon(icon, color: iconColor, size: 28),
             ),
             const SizedBox(height: 14),
-            Text(title,
-                style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _textDark)),
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: _textDark,
+              ),
+            ),
             if (subtitle != null) ...[
               const SizedBox(height: 4),
-              Text(subtitle,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                      fontSize: 12, color: _textMuted)),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: _textMuted,
+                ),
+              ),
             ],
             if (action != null && actionLabel != null) ...[
               const SizedBox(height: 16),
@@ -900,16 +957,21 @@ class _HomeWorkerState extends State<HomeWorker>
                 onTap: action,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 11),
+                    horizontal: 24,
+                    vertical: 11,
+                  ),
                   decoration: BoxDecoration(
                     color: _navyMid,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(actionLabel,
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
+                  child: Text(
+                    actionLabel,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -925,7 +987,8 @@ class _HomeWorkerState extends State<HomeWorker>
       return Scaffold(
         backgroundColor: _bgLight,
         body: const Center(
-            child: CircularProgressIndicator(color: _navyMid)),
+          child: CircularProgressIndicator(color: _navyMid),
+        ),
       );
     }
 
@@ -953,10 +1016,7 @@ class _HomeWorkerState extends State<HomeWorker>
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // Dark navy header as a sliver
             SliverToBoxAdapter(child: _buildNavyHeader()),
-
-            // Stats + requests section on light blue bg
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
               sliver: SliverToBoxAdapter(
@@ -970,12 +1030,10 @@ class _HomeWorkerState extends State<HomeWorker>
                 ),
               ),
             ),
-
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: _buildBodyList(),
             ),
-
             const SliverToBoxAdapter(child: SizedBox(height: 30)),
           ],
         ),

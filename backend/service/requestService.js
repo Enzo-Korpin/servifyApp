@@ -25,8 +25,16 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
     const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
     const after = req.query.after;
 
+    const allowedStatuses = ["pending", "accepted", "rejected", "cancelled"];
+
+    if (status && !allowedStatuses.includes(status)) {
+      throw new BadRequestError("Invalid status value", "INVALID_STATUS");
+    }
+
     const filter = { [fieldName]: userId };
-    if (status) filter.status = status;
+    if (status) {
+      filter.status = status;
+    }
 
     if (after) {
       const [dateStr, id] = after.split("|");
@@ -115,8 +123,12 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
 
 export const cancelServiceRequest = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const { cancelReason } = req.body ?? {};
   const { id } = req.params;
+
+  const cancelReason =
+    typeof req.body?.cancelReason === "string"
+      ? req.body.cancelReason.trim()
+      : "";
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new BadRequestError("Invalid request id", "INVALID_REQUEST_ID");
@@ -132,7 +144,7 @@ export const cancelServiceRequest = asyncHandler(async (req, res) => {
       $set: {
         status: "cancelled",
         cancelledAt: new Date(),
-        ...(cancelReason ? { cancelReason: cancelReason.trim() } : {}),
+        cancelReason: cancelReason || null,
       },
     },
     { new: true },
@@ -158,7 +170,11 @@ export const cancelServiceRequest = asyncHandler(async (req, res) => {
     );
   }
 
-  return res.status(200).json({ success: true, data: request, error: null });
+  return res.status(200).json({
+    success: true,
+    data: request,
+    error: null,
+  });
 });
 
 export const acceptServiceRequest = asyncHandler(async (req, res) => {

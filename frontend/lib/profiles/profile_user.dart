@@ -19,6 +19,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   bool isEditing = false;
   bool isLoading = true;
   bool isSwitchingAccount = false;
+  bool isLoggingOut = false;
 
   String name = "";
   String email = "";
@@ -73,6 +74,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         isLoading = false;
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Failed to load profile")),
       );
@@ -196,9 +198,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                   ),
                   title: Text(
                     "Take a picture",
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -222,9 +222,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                   ),
                   title: Text(
                     "Choose from gallery",
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   ),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -261,6 +259,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
       _nameFocusNode.unfocus();
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Profile updated")),
       );
@@ -270,10 +269,12 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
           e.response?.data?["error"]?.toString() ??
           "Update failed";
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Update failed")),
       );
@@ -311,9 +312,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       );
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on DioException catch (e) {
@@ -337,6 +336,80 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
           isSwitchingAccount = false;
         });
       }
+    }
+  }
+
+  Future<void> logoutUser() async {
+    if (isLoggingOut) return;
+
+    setState(() {
+      isLoggingOut = true;
+    });
+
+    try {
+      await DioClient.dio.post("/api/auth/logout");
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Logged out successfully")),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Logout failed";
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Logout failed: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoggingOut = false;
+        });
+      }
+    }
+  }
+
+  Future<void> confirmLogout() async {
+    if (isLoggingOut) return;
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Logout"),
+          content: const Text("Are you sure you want to logout?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Logout"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true) {
+      await logoutUser();
     }
   }
 
@@ -489,9 +562,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFF0F0F0),
-        ),
+        border: Border.all(color: const Color(0xFFF0F0F0)),
       ),
       child: Row(
         children: [
@@ -544,36 +615,47 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     required Color textColor,
     required VoidCallback onPressed,
     IconData? icon,
+    bool isBusy = false,
   }) {
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: isBusy ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: backgroundColor,
+          disabledBackgroundColor: backgroundColor.withOpacity(0.6),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: textColor, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Text(
-              text,
-              style: GoogleFonts.poppins(
-                color: textColor,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+        child: isBusy
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: textColor, size: 18),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    text,
+                    style: GoogleFonts.poppins(
+                      color: textColor,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -661,9 +743,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
               width: double.infinity,
               decoration: const BoxDecoration(
                 color: Color(0xFFF7F7F8),
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(26),
-                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
@@ -678,19 +758,15 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-
                     _buildSwitchAccountButton(),
                     if (authUser?.role == "worker") const SizedBox(height: 12),
-
                     _buildMainActionButton(
                       text: isEditing ? "Cancel" : "Edit Profile",
                       backgroundColor: const Color(0xFF2F57F6),
                       textColor: Colors.white,
                       onPressed: toggleEdit,
                     ),
-
                     const SizedBox(height: 14),
-
                     if (isEditing)
                       Column(
                         children: [
@@ -719,7 +795,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                           const SizedBox(height: 14),
                         ],
                       ),
-
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -746,17 +821,14 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
                     _buildMainActionButton(
                       text: "Logout",
                       icon: Icons.logout_rounded,
                       backgroundColor: const Color(0xFFFFEAEA),
                       textColor: const Color(0xFFFF6B6B),
-                      onPressed: () {
-                        // logout logic later
-                      },
+                      onPressed: confirmLogout,
+                      isBusy: isLoggingOut,
                     ),
                   ],
                 ),

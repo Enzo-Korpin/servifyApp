@@ -179,14 +179,16 @@ export const switchRole = asyncHandler(async (req, res) => {
 
 export const getWorkerStatus = asyncHandler(async (req, res) => {
   const workerId = req.user._id;
+
   if (req.user.currentRole !== "worker") {
     throw new ForbiddenError("Must be Worker", "MUST_BE_WORKER");
   }
+
   const rows = await serviceRequest.aggregate([
     {
       $match: {
         workerId: new mongoose.Types.ObjectId(workerId),
-        status: { $in: ["pending", "accepted", "rejected"] },
+        status: { $in: ["pending", "accepted", "rejected", "cancelled"] },
       },
     },
     {
@@ -196,9 +198,21 @@ export const getWorkerStatus = asyncHandler(async (req, res) => {
       },
     },
   ]);
-  const stats = { pending: 0, accepted: 0, rejected: 0 };
+
+  const stats = {
+    pending: 0,
+    accepted: 0,
+    rejected: 0,
+    cancelled: 0,
+  };
+
   rows.forEach((row) => {
     stats[row._id] = row.count;
   });
-  return res.status(200).json({ success: true, data: stats, error: null });
+
+  return res.status(200).json({
+    success: true,
+    data: stats,
+    error: null,
+  });
 });

@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:dio/dio.dart';
+import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/Access/login_screens/Login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+  final String email;
+  final String code;
+
+  const ResetPasswordScreen({
+    super.key,
+    required this.email,
+    required this.code,
+  });
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -12,8 +22,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     with SingleTickerProviderStateMixin {
   final _newPasswordCtrl     = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
+  
 
   // Single toggle — controls BOTH fields at the same time
+  bool _isLoading = false;
   bool _hidePasswords = true;
 
   // ── Entrance animation ──
@@ -99,26 +111,69 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     );
   }
 
-  void _onResetPressed() {
-    final newPassword     = _newPasswordCtrl.text.trim();
-    final confirmPassword = _confirmPasswordCtrl.text.trim();
+ Future<void> _onResetPressed() async {
+  final newPassword = _newPasswordCtrl.text.trim();
+  final confirmPassword = _confirmPasswordCtrl.text.trim();
 
-    if (newPassword.isEmpty) {
-      _showSnack("Please enter a new password");
-      return;
-    }
-    if (newPassword.length < 6) {
-      _showSnack("Password must be at least 6 characters");
-      return;
-    }
-    if (newPassword != confirmPassword) {
-      _showSnack("Passwords do not match");
-      return;
-    }
-
-    // ── Hook your reset logic here ──
-    _showSnack("Password reset successfully", isError: false);
+  if (newPassword.isEmpty) {
+    _showSnack("Please enter a new password");
+    return;
   }
+
+  if (newPassword.length < 6) {
+    _showSnack("Password must be at least 6 characters");
+    return;
+  }
+
+  if (newPassword != confirmPassword) {
+    _showSnack("Passwords do not match");
+    return;
+  }
+
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    final response = await DioClient.dio.post(
+      '/api/auth/reset-password',
+      data: {
+        "email": widget.email,
+        "code": widget.code,
+        "newPassword": newPassword,
+      },
+    );
+
+    debugPrint("RESET PASSWORD STATUS: ${response.statusCode}");
+    debugPrint("RESET PASSWORD BODY: ${response.data}");
+
+    _showSnack("Password reset successfully", isError: false);
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  } on DioException catch (e) {
+    final message =
+        e.response?.data?["message"]?.toString() ??
+        e.response?.data?["error"]?.toString() ??
+        "Failed to reset password";
+
+    _showSnack(message);
+  } catch (e) {
+    _showSnack("Failed to reset password: $e");
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+}
 
   // ── Reusable labeled password field ──
   Widget _buildPasswordField({
@@ -327,7 +382,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: _onResetPressed,
+                          onPressed: _isLoading ? null : _onResetPressed,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _navyMid,
                             elevation: 0,
@@ -335,7 +390,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: Text(
+                        child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : Text(
                             "Reset Password",
                             style: GoogleFonts.inter(
                               fontSize: 16,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -10,30 +12,30 @@ import 'package:frontend/requests/Requists_page.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
-import 'dart:async';
+import 'package:frontend/Follow/Follow_page.dart';
 
-class WorkerMapPage extends StatefulWidget {
-  const WorkerMapPage({super.key});
+class SmartWorkerMapPage extends StatefulWidget {
+  const SmartWorkerMapPage({super.key});
 
   @override
-  State<WorkerMapPage> createState() => _WorkerMapPageState();
+  State<SmartWorkerMapPage> createState() => _SmartWorkerMapPageState();
 }
 
-class _WorkerMapPageState extends State<WorkerMapPage>
+class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
 
   static const bool _useMap = false;
+
   Timer? _searchDebounce;
-  String? _searchNextCursor;
-  bool _isSearchingByName = false;
-  bool _isLoadingMoreSearch = false;
-  bool _hasMoreSearchResults = false;
+
   int _selectedIndex = 0;
   bool _isGettingLocation = false;
   bool _isLoadingWorkers = false;
   bool _isLoadingUserLocation = false;
+  bool _isLoadingMoreWorkers = false;
+  bool _hasMoreWorkers = false;
 
   double? _userLat;
   double? _userLng;
@@ -42,6 +44,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   String _activeSort = 'distance';
   bool _distanceAscending = true;
   bool _ratingDescending = true;
+  String? _nextCursor;
 
   List<Map<String, dynamic>> _allWorkers = [];
 
@@ -84,133 +87,6 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     ),
   ];
 
-  void _onSearchChanged() {
-    _searchDebounce?.cancel();
-
-    final search = _searchController.text.trim();
-
-    if (mounted) setState(() {});
-
-    if (search.isEmpty) {
-      _searchNextCursor = null;
-      _hasMoreSearchResults = false;
-      _isSearchingByName = false;
-      _fetchWorkers();
-      return;
-    }
-
-    if (search.length < 2) {
-      return;
-    }
-
-    _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
-      await _searchWorkersByName(search: search, reset: true);
-    });
-  }
-
-  Future<void> _searchWorkersByName({
-    required String search,
-    bool reset = false,
-  }) async {
-    if (_userLat == null || _userLng == null) return;
-
-    if (reset) {
-      _searchNextCursor = null;
-      _hasMoreSearchResults = false;
-    }
-
-    if (mounted) {
-      setState(() {
-        if (reset) {
-          _isLoadingWorkers = true;
-        } else {
-          _isLoadingMoreSearch = true;
-        }
-        _isSearchingByName = true;
-      });
-    }
-
-    try {
-      final queryParameters = <String, dynamic>{
-        "search": search,
-      };
-
-      if (!reset && _searchNextCursor != null) {
-        queryParameters["after"] = _searchNextCursor;
-      }
-
-      final response = await DioClient.dio.get(
-        '/api/customer/search-workers',
-        queryParameters: queryParameters,
-        options: Options(
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
-
-      final data = response.data;
-      final List rawWorkers = (data["data"]?["workers"] ?? []) as List;
-      final String? nextCursor = data["data"]?["nextCursor"]?.toString();
-
-      final mappedWorkers = rawWorkers.map<Map<String, dynamic>>((worker) {
-        return {
-          "_id": worker["_id"],
-          "name": worker["fullName"] ?? "",
-          "job": "Worker",
-          "skills": <String>[],
-          "rating": ((worker["rate"] ?? 0) as num).toDouble(),
-          "ratingCount": 0,
-          "distanceMeters": 0,
-          "distanceValue": 0.0,
-          "distance": "",
-          "lat": 0.0,
-          "lng": 0.0,
-          "image": worker["image"],
-        };
-      }).toList();
-
-      if (!mounted) return;
-
-      setState(() {
-        if (reset) {
-          _allWorkers = mappedWorkers;
-        } else {
-          _allWorkers.addAll(mappedWorkers);
-        }
-
-        _searchNextCursor = nextCursor;
-        _hasMoreSearchResults = nextCursor != null;
-      });
-
-      _triggerAnimation(_allWorkers.length);
-    } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to search workers",
-      );
-    } catch (e) {
-      _showMessage("Failed to search workers: $e");
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingWorkers = false;
-          _isLoadingMoreSearch = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadMoreSearchResults() async {
-    final search = _searchController.text.trim();
-
-    if (!_isSearchingByName) return;
-    if (search.length < 2) return;
-    if (_isLoadingMoreSearch) return;
-    if (!_hasMoreSearchResults) return;
-    if (_searchNextCursor == null) return;
-
-    await _searchWorkersByName(search: search, reset: false);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -230,39 +106,19 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     super.dispose();
   }
 
-  void _buildAnimations(int count) {
-    _slideAnimations.clear();
-    _fadeAnimations.clear();
-    for (int i = 0; i < count; i++) {
-      final start = (i * 0.12).clamp(0.0, 0.85);
-      final end = (start + 0.45).clamp(0.0, 1.0);
-      _slideAnimations.add(
-        Tween<Offset>(begin: const Offset(-0.4, 0), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animController,
-            curve: Interval(start, end, curve: Curves.easeOut),
-          ),
-        ),
-      );
-      _fadeAnimations.add(
-        Tween<double>(begin: 0.0, end: 1.0).animate(
-          CurvedAnimation(
-            parent: _animController,
-            curve: Interval(start, end, curve: Curves.easeOut),
-          ),
-        ),
-      );
-    }
-  }
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
 
-  void _triggerAnimation(int count) {
-    _buildAnimations(count);
-    _animController.reset();
-    _animController.forward();
+    if (mounted) setState(() {});
+
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
+      await _reloadWorkers(reset: true);
+    });
   }
 
   Future<void> _loadInitialData() async {
     await _fetchUserLocationFromBackend();
+
     if (_userLat == null || _userLng == null) {
       if (!mounted) return;
       setState(() {
@@ -271,11 +127,13 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       });
       _showMessage("Using default location");
     }
-    await _fetchWorkers();
+
+    await _reloadWorkers(reset: true);
   }
 
   Future<void> _fetchUserLocationFromBackend() async {
     if (mounted) setState(() => _isLoadingUserLocation = true);
+
     try {
       final response = await DioClient.dio.get(
         '/api/auth/check-auth',
@@ -284,19 +142,24 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+
       final data = response.data;
       final coords = (data["data"]?["location"]?["coordinates"] ?? []) as List;
+
       if (coords.length != 2) {
         _showMessage("User location not found");
         return;
       }
+
       final lng = (coords[0] as num).toDouble();
       final lat = (coords[1] as num).toDouble();
+
       if (!mounted) return;
       setState(() {
         _userLat = lat;
         _userLng = lng;
       });
+
       if (_useMap) {
         final z = _mapController.camera.zoom == 0
             ? 13.0
@@ -317,26 +180,33 @@ class _WorkerMapPageState extends State<WorkerMapPage>
 
   Future<void> _getCurrentLocation() async {
     if (_isGettingLocation) return;
+
     setState(() => _isGettingLocation = true);
+
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         _showMessage("Location services are disabled");
         return;
       }
+
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied)
+      if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+      }
+
       if (permission == LocationPermission.denied) {
         _showMessage("Location permission denied");
         return;
       }
+
       if (permission == LocationPermission.deniedForever) {
         _showMessage("Location permission permanently denied");
         return;
       }
 
       Position? position;
+
       try {
         position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
@@ -358,16 +228,20 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       }
 
       if (!mounted) return;
+
       setState(() {
         _userLat = position!.latitude;
         _userLng = position.longitude;
       });
-      if (_useMap)
+
+      if (_useMap) {
         _mapController.move(
           LatLng(_userLat!, _userLng!),
           _mapController.camera.zoom == 0 ? 13.0 : _mapController.camera.zoom,
         );
-      await _fetchWorkers();
+      }
+
+      await _reloadWorkers(reset: true);
       _showMessage("Showing workers near your current location");
     } on DioException catch (e) {
       _showMessage(
@@ -380,103 +254,195 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     }
   }
 
-  Future<void> _fetchWorkers() async {
+  Future<void> _reloadWorkers({required bool reset}) async {
+    await _fetchWorkersSmart(reset: reset);
+  }
+
+  Future<void> _fetchWorkersSmart({required bool reset}) async {
     if (_userLat == null || _userLng == null) return;
-    if (mounted) setState(() => _isLoadingWorkers = true);
+
+    if (reset) {
+      _nextCursor = null;
+      _hasMoreWorkers = false;
+    }
+
+    if (mounted) {
+      setState(() {
+        if (reset) {
+          _isLoadingWorkers = true;
+        } else {
+          _isLoadingMoreWorkers = true;
+        }
+      });
+    }
+
     try {
-      final int limit = _selectedSkill == null ? 15 : 20;
+      final search = _searchController.text.trim();
+
       final queryParameters = <String, dynamic>{
         "lat": _userLat,
         "lng": _userLng,
         "radiusKm": 5,
-        "limit": limit,
         "sort": _activeSort,
+        "order": _activeSort == "distance"
+            ? (_distanceAscending ? "asc" : "desc")
+            : (_ratingDescending ? "desc" : "asc"),
       };
-      if (_selectedSkill != null) queryParameters["skill"] = _selectedSkill;
+
+      if (_selectedSkill != null) {
+        queryParameters["skill"] = _selectedSkill;
+      }
+
+      if (search.length >= 2) {
+        queryParameters["search"] = search;
+      }
+
+      if (!reset && _nextCursor != null) {
+        queryParameters["after"] = _nextCursor;
+      }
+
       final response = await DioClient.dio.get(
-        '/api/customer/filtered-workers',
+        '/api/customer/search-filtered-workers',
         queryParameters: queryParameters,
         options: Options(
           sendTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 10),
         ),
       );
+
       final data = response.data;
       final List rawWorkers = (data["data"]?["workers"] ?? []) as List;
-      _allWorkers = rawWorkers.map<Map<String, dynamic>>((worker) {
-        final profile = Map<String, dynamic>.from(
-          worker["workerProfile"] ?? {},
-        );
-        final location = Map<String, dynamic>.from(worker["location"] ?? {});
-        final coords = (location["coordinates"] ?? [0.0, 0.0]) as List;
-        final double lng = coords.isNotEmpty
-            ? (coords[0] as num).toDouble()
-            : 0.0;
-        final double lat = coords.length > 1
-            ? (coords[1] as num).toDouble()
-            : 0.0;
-        final skills = List<String>.from(profile["skills"] ?? []);
-        return {
-          "_id": worker["_id"],
-          "name": worker["fullName"] ?? "",
-          "job": _resolveMainJob(skills),
-          "skills": skills,
-          "rating": ((profile["rate"] ?? 0) as num).toDouble(),
-          "ratingCount":
-              profile["ratingCount"] ?? profile["numberOfRatings"] ?? 0,
-          "distanceMeters": (worker["distanceMeters"] ?? 0) as num,
-          "distanceValue": ((worker["distanceMeters"] ?? 0) as num) / 1000,
-          "distance":
-              "${(((worker["distanceMeters"] ?? 0) as num) / 1000).toStringAsFixed(1)} km",
-          "lat": lat,
-          "lng": lng,
-          "image": worker["image"],
-        };
-      }).toList();
-      _applyLocalSort();
+      final String? nextCursor = data["data"]?["nextCursor"]?.toString();
+
+      final mappedWorkers = _mapWorkersFromApi(rawWorkers);
+
+      if (!mounted) return;
+
+      setState(() {
+        if (reset) {
+          _allWorkers = mappedWorkers;
+        } else {
+          _allWorkers.addAll(mappedWorkers);
+        }
+
+        _nextCursor = nextCursor;
+        _hasMoreWorkers = nextCursor != null;
+      });
+
       _triggerAnimation(_allWorkers.length);
-      if (mounted) setState(() {});
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to load workers",
+        e.response?.data?["message"]?.toString() ??
+            "Failed to load workers",
       );
     } catch (e) {
       _showMessage("Failed to load workers: $e");
     } finally {
-      if (mounted) setState(() => _isLoadingWorkers = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingWorkers = false;
+          _isLoadingMoreWorkers = false;
+        });
+      }
     }
+  }
+
+  Future<void> _loadMoreWorkers() async {
+    if (_isLoadingMoreWorkers) return;
+    if (!_hasMoreWorkers) return;
+    if (_nextCursor == null) return;
+
+    await _fetchWorkersSmart(reset: false);
+  }
+
+  List<Map<String, dynamic>> _mapWorkersFromApi(List rawWorkers) {
+    return rawWorkers.map<Map<String, dynamic>>((worker) {
+      final profile = Map<String, dynamic>.from(worker["workerProfile"] ?? {});
+      final location = Map<String, dynamic>.from(worker["location"] ?? {});
+      final coords = (location["coordinates"] ?? [0.0, 0.0]) as List;
+
+      final double lng = coords.isNotEmpty
+          ? (coords[0] as num).toDouble()
+          : 0.0;
+      final double lat = coords.length > 1
+          ? (coords[1] as num).toDouble()
+          : 0.0;
+
+      final skills = List<String>.from(profile["skills"] ?? []);
+
+      return {
+        "_id": worker["_id"],
+        "name": worker["fullName"] ?? "",
+        "job": _resolveMainJob(skills),
+        "skills": skills,
+        "rating": ((profile["rate"] ?? 0) as num).toDouble(),
+        "ratingCount":
+            profile["ratingCount"] ?? profile["numberOfRatings"] ?? 0,
+        "distanceMeters": (worker["distanceMeters"] ?? 0) as num,
+        "distanceValue": ((worker["distanceMeters"] ?? 0) as num) / 1000,
+        "distance":
+            "${(((worker["distanceMeters"] ?? 0) as num) / 1000).toStringAsFixed(1)} km",
+        "lat": lat,
+        "lng": lng,
+        "image": worker["image"],
+      };
+    }).toList();
   }
 
   String _resolveMainJob(List<String> skills) {
     final n = skills.map((e) => e.toLowerCase().trim()).toList();
     if (n.contains('plumbing')) return 'Plumber';
-    if (n.contains('electricity') || n.contains('electrical'))
+    if (n.contains('electricity') || n.contains('electrical')) {
       return 'Electrician';
+    }
     if (n.contains('painting')) return 'Painter';
     if (n.contains('cleaning')) return 'Cleaner';
     if (n.contains('carpentry')) return 'Carpenter';
     return 'Worker';
   }
 
-  void _applyLocalSort() {
-    if (_activeSort == 'distance') {
-      _allWorkers.sort((a, b) {
-        final cmp = (a["distanceValue"] as num).compareTo(
-          b["distanceValue"] as num,
-        );
-        return _distanceAscending ? cmp : -cmp;
-      });
-    } else if (_activeSort == 'rating') {
-      _allWorkers.sort((a, b) {
-        final cmp = (b["rating"] as num).compareTo(a["rating"] as num);
-        return _ratingDescending ? cmp : -cmp;
-      });
+  List<Map<String, dynamic>> get _visibleWorkers => List.from(_allWorkers);
+
+  void _buildAnimations(int count) {
+    _slideAnimations.clear();
+    _fadeAnimations.clear();
+
+    for (int i = 0; i < count; i++) {
+      final start = (i * 0.12).clamp(0.0, 0.85);
+      final end = (start + 0.45).clamp(0.0, 1.0);
+
+      _slideAnimations.add(
+        Tween<Offset>(
+          begin: const Offset(-0.4, 0),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
+
+      _fadeAnimations.add(
+        Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: _animController,
+            curve: Interval(start, end, curve: Curves.easeOut),
+          ),
+        ),
+      );
     }
   }
-  List<Map<String, dynamic>> get _visibleWorkers => List.from(_allWorkers);
+
+  void _triggerAnimation(int count) {
+    _buildAnimations(count);
+    _animController.reset();
+    _animController.forward();
+  }
 
   void _showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -488,64 +454,43 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     );
   }
 
-Future<void> _onCategoryTap(Category category) async {
-  setState(() {
-    _selectedSkill = category.apiSkill;
-    _activeSort = 'distance';
-    _distanceAscending = true;
-    _ratingDescending = true;
-  });
-
-  final search = _searchController.text.trim();
-  if (search.length >= 2) {
-    await _searchWorkersByName(search: search, reset: true);
-    return;
-  }
-
-  await _fetchWorkers();
-}
-
- Future<void> _onSortDistance() async {
-  setState(() {
-    if (_activeSort == 'distance') {
-      _distanceAscending = !_distanceAscending;
-    } else {
+  Future<void> _onCategoryTap(Category category) async {
+    setState(() {
+      _selectedSkill = category.apiSkill;
       _activeSort = 'distance';
       _distanceAscending = true;
-    }
-  });
+      _ratingDescending = true;
+    });
 
-  final search = _searchController.text.trim();
-  if (search.length >= 2) {
-    _applyLocalSort();
-    setState(() {});
-    return;
+    await _reloadWorkers(reset: true);
   }
 
-  await _fetchWorkers();
-}
+  Future<void> _onSortDistance() async {
+    setState(() {
+      if (_activeSort == 'distance') {
+        _distanceAscending = !_distanceAscending;
+      } else {
+        _activeSort = 'distance';
+        _distanceAscending = true;
+      }
+    });
+
+    await _reloadWorkers(reset: true);
+  }
 
   Future<void> _onSortRating() async {
-  setState(() {
-    if (_activeSort == 'rating') {
-      _ratingDescending = !_ratingDescending;
-    } else {
-      _activeSort = 'rating';
-      _ratingDescending = true;
-    }
-  });
+    setState(() {
+      if (_activeSort == 'rating') {
+        _ratingDescending = !_ratingDescending;
+      } else {
+        _activeSort = 'rating';
+        _ratingDescending = true;
+      }
+    });
 
-  final search = _searchController.text.trim();
-  if (search.length >= 2) {
-    _applyLocalSort();
-    setState(() {});
-    return;
+    await _reloadWorkers(reset: true);
   }
 
-  await _fetchWorkers();
-}
-
-  // ── Map or placeholder ──
   Widget _buildMapOrPlaceholder(List<Map<String, dynamic>> visibleWorkers) {
     if (_useMap) {
       return FlutterMap(
@@ -587,7 +532,6 @@ Future<void> _onCategoryTap(Category category) async {
       );
     }
 
-    // Dark navy placeholder to match theme
     return Container(
       color: const Color(0xFF0D1F3C),
       alignment: Alignment.center,
@@ -609,6 +553,7 @@ Future<void> _onCategoryTap(Category category) async {
         child: CircularProgressIndicator(color: Color(0xFF1E40AF)),
       );
     }
+
     if (_userLat == null || _userLng == null) {
       return Center(
         child: Text(
@@ -620,20 +565,16 @@ Future<void> _onCategoryTap(Category category) async {
 
     return Stack(
       children: [
-        // ── Map fills the full screen behind everything ──
         Positioned.fill(child: _buildMapOrPlaceholder(visibleWorkers)),
 
-        // ── Top bar: search + notification icon ──
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Search row
                 Row(
                   children: [
-                    // Search bar
                     Expanded(
                       child: Container(
                         height: 48,
@@ -676,12 +617,8 @@ Future<void> _onCategoryTap(Category category) async {
                             ),
                             if (_searchController.text.isNotEmpty)
                               GestureDetector(
-                               onTap: () async {
+                                onTap: () {
                                   _searchController.clear();
-                                  _searchNextCursor = null;
-                                  _hasMoreSearchResults = false;
-                                  _isSearchingByName = false;
-                                  await _fetchWorkers();
                                 },
                                 child: const Icon(
                                   Icons.close_rounded,
@@ -693,10 +630,7 @@ Future<void> _onCategoryTap(Category category) async {
                         ),
                       ),
                     ),
-
                     const SizedBox(width: 10),
-
-                    // Notification / profile icon button
                     Container(
                       width: 48,
                       height: 48,
@@ -710,8 +644,13 @@ Future<void> _onCategoryTap(Category category) async {
                       ),
                       child: IconButton(
                         padding: EdgeInsets.zero,
-                        onPressed: () {
-                          setState(() => _selectedIndex = 4);
+                        onPressed: () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                            builder: (_) => const FollowedWorkersPage(),
+                            ),
+                        );
                         },
                         icon: const Icon(
                           Icons.favorite_rounded,
@@ -722,14 +661,9 @@ Future<void> _onCategoryTap(Category category) async {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 10),
-
-                // Location button
                 _locationButton(),
-
                 const SizedBox(height: 12),
-
                 if (_useMap)
                   Align(
                     alignment: Alignment.centerRight,
@@ -740,7 +674,6 @@ Future<void> _onCategoryTap(Category category) async {
           ),
         ),
 
-        // ── Draggable bottom sheet ──
         DraggableScrollableSheet(
           initialChildSize: 0.45,
           minChildSize: 0.35,
@@ -753,7 +686,6 @@ Future<void> _onCategoryTap(Category category) async {
               ),
               child: Column(
                 children: [
-                  // Handle
                   const SizedBox(height: 10),
                   Container(
                     width: 40,
@@ -765,7 +697,6 @@ Future<void> _onCategoryTap(Category category) async {
                   ),
                   const SizedBox(height: 14),
 
-                  // Category chips
                   SizedBox(
                     height: 40,
                     child: ListView.separated(
@@ -779,12 +710,10 @@ Future<void> _onCategoryTap(Category category) async {
 
                   const SizedBox(height: 12),
 
-                  // Sort buttons
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        // Rating sort
                         Expanded(
                           child: GestureDetector(
                             onTap: _onSortRating,
@@ -830,10 +759,7 @@ Future<void> _onCategoryTap(Category category) async {
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 10),
-
-                        // Distance sort
                         Expanded(
                           child: GestureDetector(
                             onTap: _onSortDistance,
@@ -885,7 +811,6 @@ Future<void> _onCategoryTap(Category category) async {
 
                   const SizedBox(height: 12),
 
-                  // Worker list
                   Expanded(
                     child: _isLoadingWorkers
                         ? const Center(
@@ -911,12 +836,25 @@ Future<void> _onCategoryTap(Category category) async {
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                 ),
-                                itemCount: visibleWorkers.length,
+                                itemCount: visibleWorkers.length +
+                                    (_isLoadingMoreWorkers ? 1 : 0),
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (_, i) {
+                                  if (i == visibleWorkers.length) {
+                                    return const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: Color(0xFF1E40AF),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
                                   if (i == visibleWorkers.length - 1) {
-                                    _loadMoreSearchResults();
+                                    _loadMoreWorkers();
                                   }
 
                                   if (i >= _slideAnimations.length) {
@@ -968,7 +906,6 @@ Future<void> _onCategoryTap(Category category) async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      
       backgroundColor: const Color(0xFFEFF6FF),
       body: _buildCurrentPage(),
       bottomNavigationBar: Container(
@@ -1021,8 +958,6 @@ Future<void> _onCategoryTap(Category category) async {
     );
   }
 
-  // ── Sub-widgets ──
-
   Widget _locationButton() {
     return SizedBox(
       width: double.infinity,
@@ -1067,6 +1002,7 @@ Future<void> _onCategoryTap(Category category) async {
 
   Widget _chip(Category category) {
     final bool selected = _selectedSkill == category.apiSkill;
+
     return GestureDetector(
       onTap: () => _onCategoryTap(category),
       child: Container(
@@ -1106,6 +1042,7 @@ Future<void> _onCategoryTap(Category category) async {
   Widget _workerPin(String job) {
     IconData icon;
     Color color;
+
     switch (job.toLowerCase()) {
       case 'plumber':
         icon = Icons.plumbing;
@@ -1131,6 +1068,7 @@ Future<void> _onCategoryTap(Category category) async {
         icon = Icons.person_pin_circle;
         color = const Color(0xFF94A3B8);
     }
+
     return Container(
       decoration: BoxDecoration(
         color: color,
@@ -1191,6 +1129,7 @@ class Category {
   final String value;
   final String? apiSkill;
   final String workerType;
+
   const Category({
     required this.key,
     required this.value,

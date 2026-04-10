@@ -26,8 +26,11 @@ const COOLDOWN_SECONDS = 60;
 const CODE_TTL_MINUTES = 15;
 const PENDING_TTL_MINUTES = 30;
 
+const RESET_CODE_TTL_MINUTES = 10;
+const RESET_CODE_COOLDOWN_SECONDS = 60;
+const MAX_RESET_RESENDS = 3;
+
 export const signupUser = asyncHandler(async (req, res) => {
-  try {
     const {
       fullName,
       email,
@@ -51,7 +54,8 @@ export const signupUser = asyncHandler(async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationCode = generateVerificationCode();
 
-    const verificationCodeHash = hashCode(verificationCode);
+    // const verificationCodeHash = hashCode(verificationCode); TestVer
+    const verificationCodeHash = verificationCode;
     
 
     let imageUrl;
@@ -105,9 +109,9 @@ export const signupUser = asyncHandler(async (req, res) => {
 
     createdPendingUser = pendingUser;
 
-    sendVerificationEmail(createdPendingUser.email, verificationCode).catch(
-      console.error,
-    );
+    // sendVerificationEmail(createdPendingUser.email, verificationCode).catch(
+    //   console.error,
+    // );TestVer
 
     const safeUser = createdPendingUser.toObject();
     safeUser.password = undefined;
@@ -117,9 +121,6 @@ export const signupUser = asyncHandler(async (req, res) => {
     safeUser.resendCount = undefined;
 
     return res.status(201).json({ success: true, data: safeUser, error: null });
-  } finally {
-    session.endSession();
-  }
 });
 
 export const loginUser = asyncHandler(async (req, res) => {
@@ -153,7 +154,8 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   try {
     const { verificationCode } = req.body;
 
-    const codeHash = hashCode(verificationCode);
+    // const codeHash = hashCode(verificationCode); TestVer
+    const codeHash = verificationCode;
 
     const pendingUser = await PendingUser.findOne({
       verificationCodeHash: codeHash,
@@ -215,14 +217,157 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     const safeUser = createdUser.toObject();
     safeUser.password = undefined;
 
-    sendWelcomeEmail(safeUser.email, safeUser.fullName).catch((err) => {
-      console.error("Failed to send welcome email:", err);
-    });
+    // sendWelcomeEmail(safeUser.email, safeUser.fullName).catch((err) => {
+    //   console.error("Failed to send welcome email:", err);
+    // }); TestVer
 
     return res.status(200).json({ success: true, data: safeUser, error: null });
   } finally {
     session.endSession();
   }
+});
+
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new BadRequestError("Email is required", "EMAIL_REQUIRED");
+  }
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    throw new NotFoundError("User not found", "USER_NOT_FOUND");
+  }
+
+  if (
+    user.resetPasswordLastSentAt &&
+    user.resetPasswordLastSentAt >
+      new Date(Date.now() - RESET_CODE_COOLDOWN_SECONDS * 1000)
+  ) {
+    throw new TooManyRequestsError(
+      `Please wait ${RESET_CODE_COOLDOWN_SECONDS}s before requesting another code`,
+      "RESET_CODE_COOLDOWN"
+    );
+  }
+
+  const activeResetWindow =
+    user.resetPasswordCodeExpiry &&
+    user.resetPasswordCodeExpiry > new Date();
+
+  const currentResendCount = activeResetWindow
+    ? (user.resetPasswordResendCount ?? 0)
+    : 0;
+
+  if (currentResendCount >= MAX_RESET_RESENDS) {
+    throw new TooManyRequestsError(
+      "Resend limit reached",
+      "RESET_RESEND_LIMIT_REACHED"
+    );
+  }
+
+  const resetCode = generateVerificationCode();
+  // const resetCodeHash = hashCode(resetCode); TestVer
+  const resetCodeHash = resetCode;
+
+  user.resetPasswordCodeHash = resetCodeHash;
+  user.resetPasswordCodeExpiry = new Date(
+    Date.now() + RESET_CODE_TTL_MINUTES * 60 * 1000
+  );
+  user.resetPasswordResendCount = currentResendCount + 1;
+  user.resetPasswordLastSentAt = new Date();
+
+  await user.save();
+  // await sendVerificationEmail(user.email, resetCode); TestVer
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      email: user.email,
+    },
+    error: null,
+  });
+});
+
+export const verifyResetCode = asyncHandler(async (req, res) => {
+  const { email, code } = req.body;
+
+  if (!email || !code) {
+    throw new BadRequestError(
+      "Email and verification code are required",
+      "EMAIL_AND_CODE_REQUIRED"
+    );
+  }
+
+  // const codeHash = hashCode(code);TestVer
+  const codeHash = code;
+
+  const user = await User.findOne({
+    email,
+    resetPasswordCodeHash: codeHash,
+    resetPasswordCodeExpiry: { $gt: new Date() },
+  });
+
+  if (!user) {
+    throw new BadRequestError(
+      "Invalid or expired verification code",
+      "INVALID_OR_EXPIRED_CODE"
+    );
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: null,
+    error: null,
+  });
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  if (!email || !code || !newPassword) {
+    throw new BadRequestError(
+      "Email, code, and new password are required",
+      "MISSING_RESET_FIELDS"
+    );
+  }
+
+  if (String(newPassword).trim().length < 6) {
+    throw new BadRequestError(
+      "Password must be at least 6 characters",
+      "WEAK_PASSWORD"
+    );
+  }
+
+  // const codeHash = hashCode(code);TestVer
+  const codeHash = code;
+  const user = await User.findOne({
+    email,
+    resetPasswordCodeHash: codeHash,
+    resetPasswordCodeExpiry: { $gt: new Date() },
+  });
+
+  if (!user) {
+    throw new BadRequestError(
+      "Invalid or expired verification code",
+      "INVALID_OR_EXPIRED_CODE"
+    );
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+
+  user.resetPasswordCodeHash = undefined;
+  user.resetPasswordCodeExpiry = undefined;
+  user.resetPasswordResendCount = undefined;
+  user.resetPasswordLastSentAt = undefined;
+
+  await user.save();
+
+  return res.status(200).json({
+    success: true,
+    data: null,
+    error: null,
+  });
 });
 
 export const resendVerificationCode = asyncHandler(async (req, res) => {

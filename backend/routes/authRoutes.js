@@ -5,6 +5,10 @@ import {
   verifyEmail,
   checkAuth,
   resendVerificationCode,
+  logoutUser,
+  forgotPassword,
+  verifyResetCode,
+  resetPassword
 } from "../service/authService.js";
 
 import { loginValidation } from "../middleware/loginValidation.js";
@@ -19,6 +23,7 @@ const router = express.Router();
 
 router.post("/signup", arcjetProtection, signupValidation, signupUser);
 router.post("/login", arcjetProtection, loginValidation, loginUser);
+router.post("/logout", logoutUser);
 router.post(
   "/verify-email",
   arcjetProtection,
@@ -32,6 +37,10 @@ router.post(
   resendCodeValidation,
   resendVerificationCode,
 );
+
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-code", verifyResetCode);
+router.post("/reset-password", resetPassword);
 
 router.get("/check-auth", protectRoute, checkAuth);
 

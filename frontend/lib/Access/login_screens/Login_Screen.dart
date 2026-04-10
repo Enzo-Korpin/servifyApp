@@ -4,6 +4,8 @@ import 'package:frontend/core/network/dio_client.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/Home_pages/home_user.dart';
 import 'package:frontend/Home_pages/home_worker.dart';
+import 'package:frontend/Access/verification/forgot_password.dart';
+import 'package:frontend/Home_pages/smart_worker_map_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -66,7 +68,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (currentRole == 'customer') {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const WorkerMapPage()),
+            MaterialPageRoute(builder: (_) => const SmartWorkerMapPage()),
+            // MaterialPageRoute(builder: (_) => const WorkerMapPage()),
             (route) => false,
           );
         } else if (currentRole == 'worker') {
@@ -283,7 +286,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ForgotPasswordPage(),
+                          ),
+                        );
+                      },
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,

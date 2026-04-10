@@ -235,7 +235,9 @@ class _SignupUserState extends State<SignupUser>
       debugPrint("CUSTOMER SIGNUP STATUS: ${response.statusCode}");
       debugPrint("CUSTOMER SIGNUP BODY: ${response.data}");
 
-      if (response.statusCode == 202) {
+      if (response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          response.statusCode == 202){
         if (!mounted) return;
 
         _showMessage("Registration successful! Check your email.");

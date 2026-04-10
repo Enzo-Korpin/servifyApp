@@ -257,15 +257,16 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
   });
 });
 
+
 export const searchWorkersByName = asyncHandler(async (req, res) => {
-  const { search } = req.validateQuery;
-  const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
-  const after = req.query.after;
+  const { search, after, limit: rawLimit = 10 } = req.validateQuery;
+
+  const limit = Math.min(Number(rawLimit), 10);
 
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const regex = new RegExp(`^${escaped}`, "i");
 
-  const query = {
+  const match = {
     role: "worker",
     fullName: { $regex: regex },
   };
@@ -277,23 +278,19 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
       throw new BadRequestError("Invalid cursor", "INVALID_CURSOR");
     }
 
-    query.$and = [
+    match.$or = [
+      { fullName: { $gt: afterName } },
       {
-        $or: [
-          { fullName: { $gt: afterName } },
-          {
-            fullName: afterName,
-            _id: { $gt: new mongoose.Types.ObjectId(afterId) }, // CAST THIS
-          },
-        ],
+        fullName: afterName,
+        _id: { $gt: new mongoose.Types.ObjectId(afterId) },
       },
     ];
   }
 
   const workers = await User.aggregate([
-    { $match: query },
+    { $match: match },
     { $sort: { fullName: 1, _id: 1 } },
-    { $limit: limit },
+    { $limit: limit + 1 },
     {
       $lookup: {
         from: "workerprofiles",
@@ -305,21 +302,204 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
     { $unwind: { path: "$profile", preserveNullAndEmptyArrays: true } },
     {
       $project: {
+        _id: 1,
         fullName: 1,
         image: 1,
-        rate: "$profile.rate",
+        rate: { $ifNull: ["$profile.rate", 0] },
       },
     },
   ]);
 
-  const nextCursor =
-    workers.length === limit
-      ? `${workers[workers.length - 1].fullName}|${workers[workers.length - 1]._id}`
-      : null;
+  const hasNextPage = workers.length > limit;
+  const slicedWorkers = hasNextPage ? workers.slice(0, limit) : workers;
+
+  const nextCursor = hasNextPage
+    ? `${slicedWorkers[slicedWorkers.length - 1].fullName}|${slicedWorkers[slicedWorkers.length - 1]._id}`
+    : null;
 
   return res.status(200).json({
     success: true,
-    data: { workers: workers, nextCursor: nextCursor },
+    data: {
+      workers: slicedWorkers,
+      nextCursor,
+    },
+    error: null,
+  });
+});
+
+export const searchFilteredWorkers = asyncHandler(async (req, res) => {
+  const {
+    lat,
+    lng,
+    radiusKm = 5,
+    skill,
+    search,
+    sort = "distance",
+    order = "asc",
+    after,
+  } = req.validateQuery;
+
+  const LIMIT = 15;
+
+  const pipeline = [
+    {
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: [Number(lng), Number(lat)],
+        },
+        distanceField: "distanceMeters",
+        maxDistance: Number(radiusKm) * 1000,
+        spherical: true,
+        query: { role: "worker" },
+      },
+    },
+    {
+      $lookup: {
+        from: "workerprofiles",
+        localField: "_id",
+        foreignField: "_id",
+        as: "workerProfile",
+      },
+    },
+    {
+      $unwind: {
+        path: "$workerProfile",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $addFields: {
+        ratingValue: { $ifNull: ["$workerProfile.rate", 0] },
+        ratingCountValue: { $ifNull: ["$workerProfile.ratingCount", 0] },
+        skillsValue: { $ifNull: ["$workerProfile.skills", []] },
+      },
+    },
+  ];
+
+  const matchStage = {};
+
+  if (skill) {
+    matchStage.skillsValue = skill;
+  }
+
+  if (search) {
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    matchStage.fullName = { $regex: new RegExp(`^${escaped}`, "i") };
+  }
+
+  if (Object.keys(matchStage).length > 0) {
+    pipeline.push({ $match: matchStage });
+  }
+
+  if (after) {
+    const [afterValueRaw, afterId] = String(after).split("|");
+
+    if (
+      !afterValueRaw ||
+      !mongoose.Types.ObjectId.isValid(afterId) ||
+      Number.isNaN(Number(afterValueRaw))
+    ) {
+      throw new BadRequestError("Invalid cursor", "INVALID_CURSOR");
+    }
+
+    const afterValue = Number(afterValueRaw);
+    const afterObjectId = new mongoose.Types.ObjectId(afterId);
+
+    if (sort === "distance") {
+      pipeline.push({
+        $match: order === "asc"
+          ? {
+              $or: [
+                { distanceMeters: { $gt: afterValue } },
+                {
+                  distanceMeters: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            }
+          : {
+              $or: [
+                { distanceMeters: { $lt: afterValue } },
+                {
+                  distanceMeters: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            },
+      });
+    } else {
+      pipeline.push({
+        $match: order === "asc"
+          ? {
+              $or: [
+                { ratingValue: { $gt: afterValue } },
+                {
+                  ratingValue: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            }
+          : {
+              $or: [
+                { ratingValue: { $lt: afterValue } },
+                {
+                  ratingValue: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            },
+      });
+    }
+  }
+
+  const sortStage =
+    sort === "distance"
+      ? { distanceMeters: order === "asc" ? 1 : -1, _id: 1 }
+      : { ratingValue: order === "asc" ? 1 : -1, _id: 1 };
+
+  pipeline.push(
+    { $sort: sortStage },
+    { $limit: LIMIT + 1 },
+    {
+      $project: {
+        _id: 1,
+        fullName: 1,
+        image: 1,
+        location: 1,
+        distanceMeters: 1,
+        workerProfile: {
+          skills: "$skillsValue",
+          rate: "$ratingValue",
+          ratingCount: "$ratingCountValue",
+        },
+      },
+    }
+  );
+
+  const workers = await User.aggregate(pipeline);
+
+  const hasNextPage = workers.length > LIMIT;
+  const slicedWorkers = hasNextPage ? workers.slice(0, LIMIT) : workers;
+
+  const lastWorker = slicedWorkers[slicedWorkers.length - 1] ?? null;
+
+  let nextCursor = null;
+  if (hasNextPage && lastWorker) {
+    const cursorValue =
+      sort === "distance"
+        ? lastWorker.distanceMeters ?? 0
+        : lastWorker.workerProfile?.rate ?? 0;
+
+    nextCursor = `${cursorValue}|${lastWorker._id}`;
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      workers: slicedWorkers,
+      nextCursor,
+    },
     error: null,
   });
 });

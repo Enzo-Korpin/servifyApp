@@ -17,13 +17,30 @@ class WorkerOrderCard extends StatelessWidget {
   });
 
   Color _statusColor(String status) {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "accepted":
         return Colors.green;
       case "rejected":
         return Colors.red;
+      case "cancelled":
+        return Colors.grey;
+      case "pending":
       default:
         return Colors.orange;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case "accepted":
+        return "ACCEPTED";
+      case "rejected":
+        return "REJECTED";
+      case "cancelled":
+        return "CANCELLED";
+      case "pending":
+      default:
+        return "PENDING";
     }
   }
 
@@ -85,7 +102,7 @@ class WorkerOrderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  request.status.toUpperCase(),
+                  _statusLabel(request.status),
                   style: GoogleFonts.instrumentSans(
                     color: statusColor,
                     fontWeight: FontWeight.bold,
@@ -111,6 +128,31 @@ class WorkerOrderCard extends StatelessWidget {
               color: Colors.grey[700],
             ),
           ),
+
+          if (request.status == "accepted" && request.acceptedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "Accepted at: ${_formatDate(request.acceptedAt!)}",
+                style: GoogleFonts.instrumentSans(
+                  fontSize: 12,
+                  color: Colors.green[700],
+                ),
+              ),
+            ),
+
+          if (request.status == "rejected" && request.rejectedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "Rejected at: ${_formatDate(request.rejectedAt!)}",
+                style: GoogleFonts.instrumentSans(
+                  fontSize: 12,
+                  color: Colors.red[700],
+                ),
+              ),
+            ),
+
           if (request.rejectReason != null && request.rejectReason!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -122,6 +164,31 @@ class WorkerOrderCard extends StatelessWidget {
                 ),
               ),
             ),
+
+          if (request.status == "cancelled" && request.cancelledAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "Cancelled at: ${_formatDate(request.cancelledAt!)}",
+                style: GoogleFonts.instrumentSans(
+                  fontSize: 12,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+
+          if (request.cancelReason != null && request.cancelReason!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "Cancel reason: ${request.cancelReason}",
+                style: GoogleFonts.instrumentSans(
+                  fontSize: 12,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ),
+
           if (request.status == "pending") ...[
             const SizedBox(height: 14),
             Row(
