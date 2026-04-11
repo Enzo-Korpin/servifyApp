@@ -23,6 +23,7 @@ import {
 } from "../errors/httpErrors.js";
 
 import { verifyGoogleIdToken } from "../utils/googleAuth.js";
+import { validateAndNormalizeLocation } from "../middleware/validateAndNormalizeLocation.js";
 
 const hashCode = (code) =>
   crypto.createHash("sha256").update(String(code)).digest("hex");
@@ -42,6 +43,12 @@ const buildAuthUserResponse = (user) => ({
   authProvider: user.authProvider,
   onboardingStatus: user.onboardingStatus,
   isVerified: user.isVerified,
+  location: user.location
+    ? {
+        type: user.location.type,
+        coordinates: user.location.coordinates,
+      }
+    : null,
 });
 
 const COOLDOWN_SECONDS = 60;
@@ -436,6 +443,8 @@ export const resendVerificationCode = asyncHandler(async (req, res) => {
     if (!exists)
       throw new NotFoundError("User not found", "INVALID_CREDENTIALS");
 
+    console.log(exists.resendCount);
+
     if ((exists.resendCount ?? 0) >= MAX_RESENDS)
       throw new TooManyRequestsError(
         "Resend limit reached",
@@ -471,15 +480,16 @@ export const checkAuth = asyncHandler(async (req, res) => {
 });
 
 export const googleSignIn = asyncHandler(async (req, res) => {
-  const { idToken, requestedRole } = req.body;
+  const { idToken, requestedRole = "customer", location } = req.body;
 
-  if (!["customer", "worker"].includes(requestedRole)) {
+  if (!allowedRoles.has(requestedRole)) {
     throw new BadRequestError("Invalid role", "INVALID_ROLE");
   }
 
+  const normalizedLocation = validateAndNormalizeLocation(location);
+
   const googleUser = await verifyGoogleIdToken(idToken);
 
-  // Existing user by immutable Google identity -> login
   let user = await User.findOne({ googleSub: googleUser.googleSub });
 
   if (user) {
@@ -489,6 +499,11 @@ export const googleSignIn = asyncHandler(async (req, res) => {
       success: true,
       data: {
         user: buildAuthUserResponse(user),
+        onboardingRequired: user.onboardingStatus !== "complete",
+        nextAction:
+          user.onboardingStatus === "worker_profile_required"
+            ? "COMPLETE_WORKER_PROFILE"
+            : "GO_TO_HOME",
       },
       error: null,
     });
@@ -498,7 +513,6 @@ export const googleSignIn = asyncHandler(async (req, res) => {
 
   try {
     await session.withTransaction(async () => {
-      // Re-check inside transaction for race safety
       const existingGoogleUser = await User.findOne({
         googleSub: googleUser.googleSub,
       }).session(session);
@@ -508,7 +522,6 @@ export const googleSignIn = asyncHandler(async (req, res) => {
         return;
       }
 
-      // Never silently link by email
       const existingEmailUser = await User.findOne({
         email: googleUser.email,
       }).session(session);
@@ -531,6 +544,11 @@ export const googleSignIn = asyncHandler(async (req, res) => {
             googleSub: googleUser.googleSub,
             image: googleUser.image,
             isVerified: true,
+            onboardingStatus:
+              requestedRole === "worker"
+                ? "worker_profile_required"
+                : "complete",
+            location: normalizedLocation,
           },
         ],
         { session },
@@ -546,23 +564,12 @@ export const googleSignIn = asyncHandler(async (req, res) => {
               bio: "",
               yearsOfExperience: 0,
               skills: [],
-              ratingSum: 0,
-              ratingCount: 0,
-              rate: 0,
             },
           ],
           { session },
         );
       }
     });
-  } catch (error) {
-    if (error?.code === 11000) {
-      throw new ConflictError(
-        "An account with this email already exists.",
-        "ACCOUNT_LINK_REQUIRED",
-      );
-    }
-    throw error;
   } finally {
     await session.endSession();
   }
@@ -573,6 +580,11 @@ export const googleSignIn = asyncHandler(async (req, res) => {
     success: true,
     data: {
       user: buildAuthUserResponse(user),
+      onboardingRequired: user.onboardingStatus !== "complete",
+      nextAction:
+        user.onboardingStatus === "worker_profile_required"
+          ? "COMPLETE_WORKER_PROFILE"
+          : "GO_TO_HOME",
     },
     error: null,
   });
@@ -592,6 +604,13 @@ export const completeGoogleWorkerProfile = asyncHandler(async (req, res) => {
     throw new ForbiddenError(
       "Only workers can complete worker onboarding",
       "WORKER_ONLY",
+    );
+  }
+
+  if (req.user.onboardingStatus !== "worker_profile_required") {
+    throw new BadRequestError(
+      "Worker onboarding is already complete",
+      "ONBOARDING_ALREADY_COMPLETE",
     );
   }
 

@@ -77,6 +77,11 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       index: true,
     },
+    onboardingStatus: {
+      type: String,
+      enum: ["complete", "worker_profile_required"],
+      default: "complete",
+    },
   },
   { timestamps: true },
 );

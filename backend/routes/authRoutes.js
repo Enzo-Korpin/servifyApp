@@ -49,5 +49,10 @@ router.post("/reset-password", resetPasswordValidation, resetPassword);
 router.get("/check-auth", protectRoute, checkAuth);
 
 router.post("/google", googleSignIn);
+router.post(
+  "/google/worker-profile",
+  protectRoute,
+  completeGoogleWorkerProfile,
+);
 
 export default router;
