@@ -12,7 +12,10 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return this.authProvider === "local";
+      },
+      select: false,
     },
     role: {
       type: String,
@@ -53,13 +56,26 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    resetPasswordResendCount: {
-      type: Number,
-      default: 0,
-    },
+    // resetPasswordResendCount: {
+    //   type: Number,
+    //   default: 0,
+    // },
     resetPasswordLastSentAt: {
       type: Date,
       default: null,
+    },
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+      index: true,
+    },
+
+    googleSub: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
     },
   },
   { timestamps: true },

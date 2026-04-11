@@ -8,7 +8,9 @@ import {
   logoutUser,
   forgotPassword,
   verifyResetCode,
-  resetPassword
+  resetPassword,
+  googleSignIn,
+  completeGoogleWorkerProfile,
 } from "../service/authService.js";
 
 import { loginValidation } from "../middleware/loginValidation.js";
@@ -18,6 +20,8 @@ import { signupValidation } from "../middleware/signupValidation.js";
 import { verifyEmailValidation } from "../middleware/verifyEmailValidation.js";
 import { arcjetProtection } from "../middleware/arcjetProtection.js";
 import { resendCodeValidation } from "../middleware/resendCodeValidation.js";
+import { forgotPasswordValidation } from "../middleware/forgotPasswordValidation.js";
+import { resetPasswordValidation } from "../middleware/resetPasswordValidation.js";
 
 const router = express.Router();
 
@@ -38,10 +42,12 @@ router.post(
   resendVerificationCode,
 );
 
-router.post("/forgot-password", forgotPassword);
+router.post("/forgot-password", forgotPasswordValidation, forgotPassword);
 router.post("/verify-reset-code", verifyResetCode);
-router.post("/reset-password", resetPassword);
+router.post("/reset-password", resetPasswordValidation, resetPassword);
 
 router.get("/check-auth", protectRoute, checkAuth);
+
+router.post("/google", googleSignIn);
 
 export default router;
