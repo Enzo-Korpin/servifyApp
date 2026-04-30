@@ -15,6 +15,7 @@ class RequestModel {
   final double? latitude;
   final String? rejectReason;
   final String? cancelReason;
+  final bool hasFeedback;
 
   RequestModel({
     required this.id,
@@ -33,6 +34,7 @@ class RequestModel {
     this.latitude,
     this.rejectReason,
     this.cancelReason,
+    this.hasFeedback = false,
   });
 
   factory RequestModel.fromJson(Map<String, dynamic> json) {
@@ -48,15 +50,12 @@ class RequestModel {
       status: json['status']?.toString() ?? '',
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
-      acceptedAt: json['acceptedAt'] != null
-          ? DateTime.tryParse(json['acceptedAt'])
-          : null,
-      rejectedAt: json['rejectedAt'] != null
-          ? DateTime.tryParse(json['rejectedAt'])
-          : null,
-      cancelledAt: json['cancelledAt'] != null
-          ? DateTime.tryParse(json['cancelledAt'])
-          : null,
+      acceptedAt:
+          json['acceptedAt'] != null ? DateTime.tryParse(json['acceptedAt']) : null,
+      rejectedAt:
+          json['rejectedAt'] != null ? DateTime.tryParse(json['rejectedAt']) : null,
+      cancelledAt:
+          json['cancelledAt'] != null ? DateTime.tryParse(json['cancelledAt']) : null,
       chatId: json['chatId']?.toString(),
       longitude: coordinates != null && coordinates.length > 1
           ? (coordinates[0] as num).toDouble()
@@ -66,6 +65,31 @@ class RequestModel {
           : null,
       rejectReason: json['rejectReason']?.toString(),
       cancelReason: json['cancelReason']?.toString(),
+      hasFeedback: json['hasFeedback'] == true,
+    );
+  }
+
+  RequestModel copyWith({
+    bool? hasFeedback,
+  }) {
+    return RequestModel(
+      id: id,
+      customerId: customerId,
+      workerId: workerId,
+      message: message,
+      addressText: addressText,
+      status: status,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      acceptedAt: acceptedAt,
+      rejectedAt: rejectedAt,
+      cancelledAt: cancelledAt,
+      chatId: chatId,
+      longitude: longitude,
+      latitude: latitude,
+      rejectReason: rejectReason,
+      cancelReason: cancelReason,
+      hasFeedback: hasFeedback ?? this.hasFeedback,
     );
   }
 }

@@ -4,11 +4,13 @@ import '../../models/request_model.dart';
 class RequestCardWidget extends StatelessWidget {
   final RequestModel request;
   final VoidCallback? onCancel;
+  final VoidCallback? onRate;
 
   const RequestCardWidget({
     super.key,
     required this.request,
     this.onCancel,
+    this.onRate,
   });
 
   Color _statusColor(String status) {
@@ -54,6 +56,12 @@ class RequestCardWidget extends StatelessWidget {
 
   bool get _canCancel => request.status.toLowerCase() == 'pending';
 
+  bool get _canRate =>
+      request.status.toLowerCase() == 'accepted' && !request.hasFeedback;
+
+  bool get _isRated =>
+      request.status.toLowerCase() == 'accepted' && request.hasFeedback;
+
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor(request.status);
@@ -96,8 +104,10 @@ class RequestCardWidget extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -113,7 +123,9 @@ class RequestCardWidget extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 12),
+
           Text(
             request.message.isNotEmpty ? request.message : 'No message provided',
             style: TextStyle(
@@ -122,7 +134,9 @@ class RequestCardWidget extends StatelessWidget {
               height: 1.4,
             ),
           ),
+
           const SizedBox(height: 12),
+
           Row(
             children: [
               Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
@@ -239,6 +253,54 @@ class RequestCardWidget extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
+              ),
+            ),
+          ],
+
+          if (_canRate) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onRate,
+                icon: const Icon(Icons.star_rate_rounded),
+                label: const Text('Rate Worker'),
+                style: ElevatedButton.styleFrom(
+  backgroundColor: const Color(0xFFFFB800),
+  foregroundColor: const Color(0xFF2D1B00),
+  padding: const EdgeInsets.symmetric(vertical: 12),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+  ),
+  elevation: 0,
+),
+              ),
+            ),
+          ],
+
+          if (_isRated) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade700),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Rated',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

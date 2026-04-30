@@ -3,13 +3,14 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
 // http://10.0.2.2:5000
+// http://192.168.100.9:5000
 class DioClient {
   static late Dio dio;
 
   static Future<void> init() async {
     dio = Dio(
       BaseOptions(
-        baseUrl: 'http://10.0.2.2:5000',
+        baseUrl: 'http://192.168.100.9:5000',
         headers: {
           'Content-Type': 'application/json',
         },

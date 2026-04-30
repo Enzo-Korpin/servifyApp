@@ -68,6 +68,132 @@ class _RequestsPageState extends State<RequestsPage> {
     }
   }
 
+  Future<Map<String, dynamic>?> _showRatingDialog() async {
+  int selectedRating = 5;
+  final commentController = TextEditingController();
+
+  return await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Rate worker'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('How was your experience?'),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starValue = index + 1;
+                    final selected = starValue <= selectedRating;
+
+                    return IconButton(
+                      onPressed: () {
+                        setDialogState(() {
+                          selectedRating = starValue;
+                        });
+                      },
+                      icon: Icon(
+                        selected ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 32,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: commentController,
+                  maxLines: 3,
+                  maxLength: 300,
+                  decoration: const InputDecoration(
+                    hintText: 'Write optional comment...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context, {
+                    'rate': selectedRating,
+                    'comment': commentController.text.trim(),
+                  });
+                },
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<void> _rateRequest(RequestModel request) async {
+  final result = await _showRatingDialog();
+  if (result == null) return;
+
+  try {
+    await _requestService.submitFeedback(
+      requestId: request.id,
+      rate: result['rate'] as int,
+      comment: result['comment']?.toString(),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      final index = _requests.indexWhere((r) => r.id == request.id);
+      if (index != -1) {
+        _requests[index] = _requests[index].copyWith(hasFeedback: true);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Feedback submitted successfully'),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    String message = 'Failed to submit feedback';
+
+    if (e is DioException) {
+      final code = e.response?.data?['error']?['code']?.toString();
+
+      if (code == 'FEEDBACK_ALREADY_SUBMITTED') {
+        message = 'You already rated this request';
+
+        setState(() {
+          final index = _requests.indexWhere((r) => r.id == request.id);
+          if (index != -1) {
+            _requests[index] = _requests[index].copyWith(hasFeedback: true);
+          }
+        });
+      } else {
+        message = e.response?.data?['message']?.toString() ??
+            e.response?.data?['error']?['message']?.toString() ??
+            e.response?.data?['error']?.toString() ??
+            message;
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+}
+
   Future<void> _fetchRequests({bool refresh = false}) async {
     try {
       if (refresh) {
@@ -412,14 +538,18 @@ class _RequestsPageState extends State<RequestsPage> {
         final request = _requests[index];
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: RequestCardWidget(
-            request: request,
-            onCancel: request.status.toLowerCase() == 'pending'
-                ? () => _cancelRequest(request)
-                : null,
-          ),
-        );
+  padding: const EdgeInsets.only(bottom: 10),
+  child: RequestCardWidget(
+    request: request,
+    onCancel: request.status.toLowerCase() == 'pending'
+        ? () => _cancelRequest(request)
+        : null,
+    onRate: request.status.toLowerCase() == 'accepted' &&
+            !request.hasFeedback
+        ? () => _rateRequest(request)
+        : null,
+  ),
+);
       },
     );
   }

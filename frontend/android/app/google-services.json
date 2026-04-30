@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "162722978391",
+    "project_id": "servify-37881",
+    "storage_bucket": "servify-37881.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:162722978391:android:56e186ab964e260fcf6112",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "162722978391-kg1o13agrbjaf8a58i3cuj575r0klgi9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.frontend",
+            "certificate_hash": "4830ba2f4690751c11e7c454a52ee93a559341bc"
+          }
+        },
+        {
+          "client_id": "162722978391-qdfgfv439k0c0e5o8mo8ibk46dn5ktqp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQLpgpcxjS8wVAHn_Yg63sJXuJxTO1qzQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "162722978391-qdfgfv439k0c0e5o8mo8ibk46dn5ktqp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

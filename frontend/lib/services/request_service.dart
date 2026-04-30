@@ -31,6 +31,21 @@ class RequestService {
     );
   }
 
+  Future<void> submitFeedback({
+  required String requestId,
+  required int rate,
+  String? comment,
+}) async {
+  await DioClient.dio.post(
+    '/api/feedback/$requestId',
+    data: {
+      'rate': rate,
+      if (comment != null && comment.trim().isNotEmpty)
+        'comment': comment.trim(),
+    },
+  );
+}
+
   Future<RequestModel> cancelServiceRequest(
     String requestId, {
     String? cancelReason,

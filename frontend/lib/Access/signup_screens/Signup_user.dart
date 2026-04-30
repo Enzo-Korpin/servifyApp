@@ -1,8 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/Access/google_flow/google_auth_service.dart';
 import 'package:frontend/Access/login_screens/Login_Screen.dart';
+import 'package:frontend/Home_pages/smart_worker_map_page.dart';
 import 'package:frontend/core/network/dio_client.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'Picklocation.dart';
 import 'verify_code_screen.dart';
 
@@ -60,6 +63,16 @@ class _SignupUserState extends State<SignupUser>
     );
 
     _cardAnimationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _cardAnimationController.dispose();
+    fullNameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    addressController.dispose();
+    super.dispose();
   }
 
   InputDecoration _inputDecoration({
@@ -148,6 +161,7 @@ class _SignupUserState extends State<SignupUser>
 
   void _showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -169,16 +183,13 @@ class _SignupUserState extends State<SignupUser>
       ),
     );
 
-    if (result != null) {
+    if (result != null && result is Map) {
       setState(() {
-        addressController.text = result["address"] ?? "Selected Location";
+        addressController.text =
+            (result["address"] ?? "Selected Location").toString();
         selectedLat = (result["lat"] as num?)?.toDouble();
         selectedLng = (result["lng"] as num?)?.toDouble();
       });
-
-      debugPrint("Selected address: ${addressController.text}");
-      debugPrint("Selected lat: $selectedLat");
-      debugPrint("Selected lng: $selectedLng");
     }
   }
 
@@ -216,28 +227,17 @@ class _SignupUserState extends State<SignupUser>
       "lng": selectedLng,
     };
 
-    debugPrint("========== CUSTOMER SIGNUP PAYLOAD ==========");
-    payload.forEach((key, value) {
-      debugPrint("$key: $value");
-    });
-    debugPrint("============================================");
-
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final response = await DioClient.dio.post(
-        '/api/auth/signup',
+        "/api/auth/signup",
         data: payload,
       );
 
-      debugPrint("CUSTOMER SIGNUP STATUS: ${response.statusCode}");
-      debugPrint("CUSTOMER SIGNUP BODY: ${response.data}");
-
       if (response.statusCode == 200 ||
           response.statusCode == 201 ||
-          response.statusCode == 202){
+          response.statusCode == 202) {
         if (!mounted) return;
 
         _showMessage("Registration successful! Check your email.");
@@ -254,8 +254,6 @@ class _SignupUserState extends State<SignupUser>
         _showMessage("Signup failed");
       }
     } on DioException catch (e) {
-      debugPrint("CUSTOMER SIGNUP ERROR: ${e.response?.data}");
-
       final message =
           e.response?.data?["message"]?.toString() ??
           e.response?.data?["error"]?.toString() ??
@@ -265,22 +263,72 @@ class _SignupUserState extends State<SignupUser>
     } catch (e) {
       _showMessage("Signup failed: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _cardAnimationController.dispose();
-    fullNameController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
-    addressController.dispose();
-    super.dispose();
+  Future<void> _googleSignup() async {
+    if (selectedLat == null || selectedLng == null) {
+      _showMessage("Please select your address from the map first");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await GoogleAuthService.signInWithGoogle(
+        requestedRole: "customer",
+        lat: selectedLat!,
+        lng: selectedLng!,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (!mounted) return;
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SmartWorkerMapPage()),
+          (route) => false,
+        );
+      } else {
+        _showMessage("Google signup failed");
+      }
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Google signup failed";
+
+      _showMessage(message);
+    } catch (e) {
+      _showMessage(e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _googleButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: OutlinedButton.icon(
+        onPressed: _isLoading ? null : _googleSignup,
+        icon: Image.asset("assets/google.png", width: 26),
+        label: Text(
+          "Sign up with Google",
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFF223766), width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -364,14 +412,18 @@ class _SignupUserState extends State<SignupUser>
                           controller: fullNameController,
                           hintText: "Enter your Full Name",
                         ),
+
                         const SizedBox(height: 18),
+
                         _buildField(
                           title: "Email",
                           controller: emailController,
                           hintText: "Enter your Email",
                           keyboardType: TextInputType.emailAddress,
                         ),
+
                         const SizedBox(height: 18),
+
                         _buildField(
                           title: "Password",
                           controller: passwordController,
@@ -392,7 +444,9 @@ class _SignupUserState extends State<SignupUser>
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 18),
+
                         _buildField(
                           title: "Address",
                           controller: addressController,
@@ -440,7 +494,7 @@ class _SignupUserState extends State<SignupUser>
                           ),
                         )
                       : Text(
-                          "Sign UP",
+                          "Sign Up",
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 20,
@@ -449,6 +503,40 @@ class _SignupUserState extends State<SignupUser>
                         ),
                 ),
               ),
+
+              const SizedBox(height: 14),
+
+              Row(
+                children: [
+                  const Expanded(
+                    child: Divider(
+                      color: Color(0xFF223766),
+                      thickness: 1,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      "or",
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF7F90B5),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Divider(
+                      color: Color(0xFF223766),
+                      thickness: 1,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              _googleButton(),
 
               const SizedBox(height: 22),
 

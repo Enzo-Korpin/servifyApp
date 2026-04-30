@@ -15,7 +15,7 @@ const VALID_ISSUERS = new Set([
   "https://accounts.google.com",
 ]);
 
-export const verifyGoogleIdToken = asyncHandler(async (idToken) => {
+export const verifyGoogleIdToken = async (idToken) => {
   if (!idToken) {
     throw new UnauthorizedError(
       "Google ID token is required",
@@ -28,7 +28,13 @@ export const verifyGoogleIdToken = asyncHandler(async (idToken) => {
   }
 
   let ticket;
+  console.log("GOOGLE_CLIENT_IDS:", GOOGLE_AUDIENCES);
+  console.log("ID TOKEN START:", idToken?.slice(0, 30));
+  const payloadBase64 = idToken.split(".")[1];
+  const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf8");
+  console.log("GOOGLE TOKEN PAYLOAD:", JSON.parse(payloadJson));
   try {
+
     ticket = await googleClient.verifyIdToken({
       idToken,
       audience: GOOGLE_AUDIENCES,
@@ -67,4 +73,4 @@ export const verifyGoogleIdToken = asyncHandler(async (idToken) => {
     image: payload.picture || "",
     emailVerified: Boolean(payload.email_verified),
   };
-});
+};

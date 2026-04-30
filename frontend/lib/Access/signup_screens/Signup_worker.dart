@@ -1,12 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:frontend/Access/google_flow/google_auth_service.dart';
+import 'package:frontend/Access/google_flow/google_worker_profile_page.dart';
 import 'package:frontend/Access/login_screens/Login_screen.dart';
+import 'package:frontend/Access/signup_screens/verify_code_screen.dart';
+import 'package:frontend/Home_pages/home_worker.dart';
+import 'package:frontend/core/network/dio_client.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:frontend/Access/signup_screens/verify_code_screen.dart';
+
 import 'Picklocation.dart';
 
 class StartUser extends StatefulWidget {
@@ -17,7 +22,6 @@ class StartUser extends StatefulWidget {
 }
 
 class _StartUserState extends State<StartUser> {
-  // ── Brand colours ──────────────────────────────────────────────────────────
   static const Color _navy = Color(0xFF0D1B3E);
   static const Color _cyan = Color(0xFF1EBBF0);
   static const Color _cardBg = Color(0xFF162447);
@@ -25,7 +29,6 @@ class _StartUserState extends State<StartUser> {
   static const Color _inputBorder = Color(0xFF2A3F6F);
   static const Color _textMuted = Color(0xFF8FA3C8);
 
-  // ── Data ───────────────────────────────────────────────────────────────────
   final List<String> skills = [
     "Plumbing",
     "Electricity",
@@ -51,10 +54,6 @@ class _StartUserState extends State<StartUser> {
   double? _lat;
   double? _lng;
 
-  static const String baseUrl = 'http://10.0.2.2:5000';
-  static const String signupEndpoint = '$baseUrl/api/auth/signup';
-
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void dispose() {
     addressController.dispose();
@@ -64,9 +63,9 @@ class _StartUserState extends State<StartUser> {
     super.dispose();
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   void _showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -84,18 +83,23 @@ class _StartUserState extends State<StartUser> {
         source: ImageSource.gallery,
         imageQuality: 70,
       );
+
       if (picked == null) return;
-      setState(() => _selectedImage = File(picked.path));
+
+      setState(() {
+        _selectedImage = File(picked.path);
+      });
     } catch (e) {
-      _showMessage('Failed to pick image: $e');
+      _showMessage("Failed to pick image: $e");
     }
   }
 
   Future<void> _pickLocation() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const PickLocationScreen()),
+      MaterialPageRoute(builder: (_) => const PickLocationScreen()),
     );
+
     if (result != null && result is Map) {
       setState(() {
         addressController.text = (result["address"] ?? "").toString();
@@ -117,7 +121,7 @@ class _StartUserState extends State<StartUser> {
         _lng == null ||
         selectedSkills.isEmpty ||
         selectedYears == null) {
-      _showMessage('Please fill all required fields');
+      _showMessage("Please fill all required fields");
       return;
     }
 
@@ -125,6 +129,7 @@ class _StartUserState extends State<StartUser> {
 
     try {
       String? base64Image;
+
       if (_selectedImage != null) {
         final bytes = await _selectedImage!.readAsBytes();
         base64Image = "data:image/jpeg;base64,${base64Encode(bytes)}";
@@ -137,51 +142,100 @@ class _StartUserState extends State<StartUser> {
         "role": "worker",
         "lat": _lat,
         "lng": _lng,
-        "skills": selectedSkills
-            .map((skill) => skill.toLowerCase().trim())
-            .toList(),
+        "skills": selectedSkills.map((skill) {
+          return skill.toLowerCase().trim();
+        }).toList(),
         "yearsOfExperience": selectedYears,
         if (base64Image != null) "image": base64Image,
       };
 
-      final response = await http.post(
-        Uri.parse(signupEndpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
+      final response = await DioClient.dio.post(
+        "/api/auth/signup",
+        data: payload,
       );
-
-      Map<String, dynamic> data = {};
-      try {
-        if (response.body.isNotEmpty) {
-          final decoded = jsonDecode(response.body);
-          if (decoded is Map<String, dynamic>) data = decoded;
-        }
-      } catch (_) {}
 
       if (response.statusCode == 200 ||
           response.statusCode == 201 ||
           response.statusCode == 202) {
-        _showMessage('Registration successful! Check your email.');
         if (!mounted) return;
+
+        _showMessage("Registration successful! Check your email.");
+
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (ctx) => VerifyCodeScreen(role: "worker", email: email),
+            builder: (_) => VerifyCodeScreen(
+              role: "worker",
+              email: email,
+            ),
           ),
         );
       } else {
-        final message = data['message']?.toString() ??
-            data['error']?.toString() ??
-            'Signup failed';
-        _showMessage(message);
+        _showMessage("Signup failed");
       }
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Signup failed";
+
+      _showMessage(message);
     } catch (e) {
-      _showMessage('An error occurred: $e');
+      _showMessage("An error occurred: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ── Shared input decoration ────────────────────────────────────────────────
+  Future<void> _googleSignup() async {
+    if (_lat == null || _lng == null) {
+      _showMessage("Please select your service address first");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await GoogleAuthService.signInWithGoogle(
+        requestedRole: "worker",
+        lat: _lat!,
+        lng: _lng!,
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      final nextAction = data["data"]?["nextAction"];
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (!mounted) return;
+
+        if (nextAction == "COMPLETE_WORKER_PROFILE") {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const GoogleWorkerProfilePage(),
+            ),
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeWorker()),
+            (route) => false,
+          );
+        }
+      } else {
+        _showMessage("Google signup failed");
+      }
+    } on DioException catch (e) {
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Google signup failed";
+
+      _showMessage(message);
+    } catch (e) {
+      _showMessage(e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   InputDecoration _inputDecoration({
     required String labelText,
     Widget? suffixIcon,
@@ -189,7 +243,7 @@ class _StartUserState extends State<StartUser> {
   }) {
     return InputDecoration(
       labelText: labelText,
-      labelStyle: TextStyle(color: _textMuted, fontSize: 14),
+      labelStyle: const TextStyle(color: _textMuted, fontSize: 14),
       filled: true,
       fillColor: _inputBg,
       border: OutlineInputBorder(
@@ -209,32 +263,32 @@ class _StartUserState extends State<StartUser> {
     );
   }
 
-  // ── Section label ──────────────────────────────────────────────────────────
-  Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(
-          text,
-          style: GoogleFonts.inter(
-            color: _textMuted,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.4,
-          ),
+  Widget _label(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          color: _textMuted,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.4,
         ),
-      );
+      ),
+    );
+  }
 
-  // ── Multi-select skills dropdown ───────────────────────────────────────────
   Widget _buildSkillsDropdown() {
-    final label = selectedSkills.isEmpty
-        ? 'Select skills'
-        : selectedSkills.join(', ');
+    final label =
+        selectedSkills.isEmpty ? "Select skills" : selectedSkills.join(", ");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Trigger button
         GestureDetector(
-          onTap: () => setState(() => _skillsDropdownOpen = !_skillsDropdownOpen),
+          onTap: () {
+            setState(() => _skillsDropdownOpen = !_skillsDropdownOpen);
+          },
           child: Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -271,7 +325,6 @@ class _StartUserState extends State<StartUser> {
           ),
         ),
 
-        // Dropdown panel
         if (_skillsDropdownOpen)
           Container(
             margin: const EdgeInsets.only(top: 4),
@@ -296,22 +349,18 @@ class _StartUserState extends State<StartUser> {
                       }
                     });
                   },
-                  borderRadius: BorderRadius.vertical(
-                    top: entry.key == 0
-                        ? const Radius.circular(14)
-                        : Radius.zero,
-                    bottom: isLast ? const Radius.circular(14) : Radius.zero,
-                  ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 13),
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
                     decoration: BoxDecoration(
                       color: selected
                           ? _cyan.withOpacity(0.12)
                           : Colors.transparent,
                       border: isLast
                           ? null
-                          : Border(
+                          : const Border(
                               bottom: BorderSide(
                                 color: _inputBorder,
                                 width: 0.8,
@@ -320,7 +369,6 @@ class _StartUserState extends State<StartUser> {
                     ),
                     child: Row(
                       children: [
-                        // Custom checkbox
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
                           width: 20,
@@ -334,8 +382,11 @@ class _StartUserState extends State<StartUser> {
                             ),
                           ),
                           child: selected
-                              ? const Icon(Icons.check,
-                                  size: 13, color: Colors.white)
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 13,
+                                  color: Colors.white,
+                                )
                               : null,
                         ),
                         const SizedBox(width: 12),
@@ -344,9 +395,8 @@ class _StartUserState extends State<StartUser> {
                           style: GoogleFonts.inter(
                             color: selected ? Colors.white : _textMuted,
                             fontSize: 14,
-                            fontWeight: selected
-                                ? FontWeight.w500
-                                : FontWeight.normal,
+                            fontWeight:
+                                selected ? FontWeight.w500 : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -357,7 +407,6 @@ class _StartUserState extends State<StartUser> {
             ),
           ),
 
-        // Selected chips
         if (selectedSkills.isNotEmpty) ...[
           const SizedBox(height: 10),
           Wrap(
@@ -365,8 +414,10 @@ class _StartUserState extends State<StartUser> {
             runSpacing: 6,
             children: selectedSkills.map((skill) {
               return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: _cyan.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -385,9 +436,10 @@ class _StartUserState extends State<StartUser> {
                     ),
                     const SizedBox(width: 4),
                     GestureDetector(
-                      onTap: () => setState(() => selectedSkills.remove(skill)),
-                      child: const Icon(Icons.close,
-                          size: 13, color: _cyan),
+                      onTap: () {
+                        setState(() => selectedSkills.remove(skill));
+                      },
+                      child: const Icon(Icons.close, size: 13, color: _cyan),
                     ),
                   ],
                 ),
@@ -399,7 +451,31 @@ class _StartUserState extends State<StartUser> {
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  Widget _googleButton() {
+    return SizedBox(
+      height: 56,
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isLoading ? null : _googleSignup,
+        icon: Image.asset("assets/google.png", width: 26),
+        label: Text(
+          "Sign up with Google",
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: _inputBorder, width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -408,27 +484,29 @@ class _StartUserState extends State<StartUser> {
         backgroundColor: _navy,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 18),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: GestureDetector(
-        // Close dropdown when tapping outside
         onTap: () {
           if (_skillsDropdownOpen) {
             setState(() => _skillsDropdownOpen = false);
           }
         },
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24).copyWith(bottom: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 24).copyWith(
+            bottom: 40,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
 
-              // ── Header ────────────────────────────────────────────────────
               Center(
                 child: Column(
                   children: [
@@ -454,7 +532,6 @@ class _StartUserState extends State<StartUser> {
 
               const SizedBox(height: 28),
 
-              // ── Avatar ────────────────────────────────────────────────────
               Center(
                 child: Stack(
                   children: [
@@ -469,8 +546,11 @@ class _StartUserState extends State<StartUser> {
                       child: ClipOval(
                         child: _selectedImage != null
                             ? Image.file(_selectedImage!, fit: BoxFit.cover)
-                            : const Icon(Icons.person,
-                                size: 54, color: _textMuted),
+                            : const Icon(
+                                Icons.person,
+                                size: 54,
+                                color: _textMuted,
+                              ),
                       ),
                     ),
                     Positioned(
@@ -483,11 +563,13 @@ class _StartUserState extends State<StartUser> {
                           decoration: BoxDecoration(
                             color: _cyan,
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: _navy, width: 2),
+                            border: Border.all(color: _navy, width: 2),
                           ),
-                          child: const Icon(Icons.camera_alt,
-                              color: Colors.white, size: 16),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
@@ -497,7 +579,6 @@ class _StartUserState extends State<StartUser> {
 
               const SizedBox(height: 32),
 
-              // ── Form card ─────────────────────────────────────────────────
               Container(
                 decoration: BoxDecoration(
                   color: _cardBg,
@@ -508,21 +589,22 @@ class _StartUserState extends State<StartUser> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Full Name
                     _label("FULL NAME"),
                     TextField(
                       controller: nameController,
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration(
                         labelText: "Enter your full name",
-                        prefixIcon: const Icon(Icons.person_outline,
-                            color: _textMuted, size: 18),
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: _textMuted,
+                          size: 18,
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    // Email
                     _label("EMAIL"),
                     TextField(
                       controller: emailController,
@@ -530,14 +612,16 @@ class _StartUserState extends State<StartUser> {
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration(
                         labelText: "Enter your email",
-                        prefixIcon: const Icon(Icons.email_outlined,
-                            color: _textMuted, size: 18),
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: _textMuted,
+                          size: 18,
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    // Password
                     _label("PASSWORD"),
                     TextField(
                       controller: passwordController,
@@ -545,8 +629,11 @@ class _StartUserState extends State<StartUser> {
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration(
                         labelText: "Enter your password",
-                        prefixIcon: const Icon(Icons.lock_outline,
-                            color: _textMuted, size: 18),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: _textMuted,
+                          size: 18,
+                        ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _hidePassword
@@ -555,15 +642,15 @@ class _StartUserState extends State<StartUser> {
                             color: _textMuted,
                             size: 18,
                           ),
-                          onPressed: () =>
-                              setState(() => _hidePassword = !_hidePassword),
+                          onPressed: () {
+                            setState(() => _hidePassword = !_hidePassword);
+                          },
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    // Service Address
                     _label("SERVICE ADDRESS"),
                     TextField(
                       controller: addressController,
@@ -572,22 +659,26 @@ class _StartUserState extends State<StartUser> {
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration(
                         labelText: "Select from map",
-                        prefixIcon: const Icon(Icons.location_on_outlined,
-                            color: _textMuted, size: 18),
-                        suffixIcon: const Icon(Icons.map_outlined,
-                            color: _cyan, size: 18),
+                        prefixIcon: const Icon(
+                          Icons.location_on_outlined,
+                          color: _textMuted,
+                          size: 18,
+                        ),
+                        suffixIcon: const Icon(
+                          Icons.map_outlined,
+                          color: _cyan,
+                          size: 18,
+                        ),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    // Skills (multi-select dropdown)
                     _label("PRIMARY SKILLS"),
                     _buildSkillsDropdown(),
 
                     const SizedBox(height: 18),
 
-                    // Experience
                     _label("YEARS OF EXPERIENCE"),
                     DropdownButtonFormField<int>(
                       value: selectedYears,
@@ -596,20 +687,24 @@ class _StartUserState extends State<StartUser> {
                       iconEnabledColor: _textMuted,
                       decoration: _inputDecoration(
                         labelText: "Select years (1 – 30)",
-                        prefixIcon: const Icon(Icons.workspace_premium_outlined,
-                            color: _textMuted, size: 18),
+                        prefixIcon: const Icon(
+                          Icons.workspace_premium_outlined,
+                          color: _textMuted,
+                          size: 18,
+                        ),
                       ),
-                      items: yearsList
-                          .map((y) => DropdownMenuItem<int>(
-                                value: y,
-                                child: Text(
-                                  "$y ${y == 1 ? 'year' : 'years'}",
-                                  style:
-                                      const TextStyle(color: Colors.white),
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (val) => setState(() => selectedYears = val),
+                      items: yearsList.map((y) {
+                        return DropdownMenuItem<int>(
+                          value: y,
+                          child: Text(
+                            "$y ${y == 1 ? 'year' : 'years'}",
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() => selectedYears = val);
+                      },
                     ),
                   ],
                 ),
@@ -617,7 +712,6 @@ class _StartUserState extends State<StartUser> {
 
               const SizedBox(height: 28),
 
-              // ── Sign Up button ─────────────────────────────────────────────
               SizedBox(
                 height: 56,
                 width: double.infinity,
@@ -636,7 +730,9 @@ class _StartUserState extends State<StartUser> {
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5),
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
                         )
                       : Text(
                           "Sign Up",
@@ -650,9 +746,36 @@ class _StartUserState extends State<StartUser> {
                 ),
               ),
 
+              const SizedBox(height: 14),
+
+              Row(
+                children: [
+                  const Expanded(
+                    child: Divider(color: _inputBorder, thickness: 1),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      "or",
+                      style: GoogleFonts.inter(
+                        color: _textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Divider(color: _inputBorder, thickness: 1),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              _googleButton(),
+
               const SizedBox(height: 20),
 
-              // ── Footer ────────────────────────────────────────────────────
               Center(
                 child: Text(
                   "By signing up you agree to Servify's\nTerms of Service and Privacy Policy",
@@ -672,13 +795,18 @@ class _StartUserState extends State<StartUser> {
                   Text(
                     "Already have an account? ",
                     style: GoogleFonts.inter(
-                        color: _textMuted, fontSize: 14),
+                      color: _textMuted,
+                      fontSize: 14,
+                    ),
                   ),
                   GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (ctx) => const LoginScreen()),
-                    ),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LoginScreen(),
+                        ),
+                      );
+                    },
                     child: Text(
                       "Sign in",
                       style: GoogleFonts.inter(

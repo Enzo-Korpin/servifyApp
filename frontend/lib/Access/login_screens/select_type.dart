@@ -715,7 +715,6 @@ class _SelectTypeState extends State<SelectType> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 28),
 
                   // Login

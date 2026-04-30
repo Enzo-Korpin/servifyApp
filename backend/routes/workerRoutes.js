@@ -21,18 +21,16 @@ router.get(
   requireCompletedOnboarding,
   getWorkerStatus,
 );
-router.post("/switch-role", protectRoute, switchRole);
+router.post("/switch-role", protectRoute, requireCompletedOnboarding, switchRole);
 router.get("/allWorkers", getAllWorker);
 router.get(
   "/profile",
   protectRoute,
-  requireCompletedOnboarding,
   getWorkerProfile,
 );
 router.put(
   "/profile",
   protectRoute,
-  requireCompletedOnboarding,
   workerProfileValidation,
   updateWorkerProfile,
 );

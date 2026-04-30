@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:frontend/core/network/dio_client.dart';
 import 'package:dio/dio.dart';
-import 'package:frontend/Home_pages/home_user.dart';
-import 'package:frontend/Home_pages/home_worker.dart';
+import 'package:flutter/material.dart';
+import 'package:frontend/Access/google_flow/google_auth_service.dart';
+import 'package:frontend/Access/google_flow/google_worker_profile_page.dart';
 import 'package:frontend/Access/verification/forgot_password.dart';
+import 'package:frontend/Home_pages/home_worker.dart';
 import 'package:frontend/Home_pages/smart_worker_map_page.dart';
+import 'package:frontend/core/network/dio_client.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,11 +16,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final emailCtrl = TextEditingController();
-  final passwordCtrl = TextEditingController();
+  final TextEditingController emailCtrl = TextEditingController();
+  final TextEditingController passwordCtrl = TextEditingController();
 
   bool _hidePassword = true;
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -30,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -39,6 +42,35 @@ class _LoginScreenState extends State<LoginScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  void _goToHomeByRole({
+    required String? currentRole,
+    required String? nextAction,
+  }) {
+    if (!mounted) return;
+
+    if (nextAction == "COMPLETE_WORKER_PROFILE") {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const GoogleWorkerProfilePage()),
+        (route) => false,
+      );
+      return;
+    }
+
+    if (currentRole == "customer") {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SmartWorkerMapPage()),
+        (route) => false,
+      );
+    } else if (currentRole == "worker") {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeWorker()),
+        (route) => false,
+      );
+    } else {
+      _showMessage("Unknown role");
+    }
   }
 
   Future<void> _login() async {
@@ -54,42 +86,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await DioClient.dio.post(
-        '/api/auth/login',
-        data: {"email": email, "password": password},
+        "/api/auth/login",
+        data: {
+          "email": email,
+          "password": password,
+        },
       );
 
       final data = response.data as Map<String, dynamic>?;
-      if (response.statusCode == 200 && data != null && data['success'] == true) {
-        final userData = data['data'] as Map<String, dynamic>?;
-        final currentRole = userData?['currentRole'] ?? userData?['role'];
+
+      if (response.statusCode == 200 && data != null && data["success"] == true) {
+        final userData = data["data"] as Map<String, dynamic>?;
+        final currentRole = userData?["currentRole"] ?? userData?["role"];
 
         _showMessage("Login successful");
-        if (!mounted) return;
 
-        if (currentRole == 'customer') {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SmartWorkerMapPage()),
-            // MaterialPageRoute(builder: (_) => const WorkerMapPage()),
-            (route) => false,
-          );
-        } else if (currentRole == 'worker') {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const HomeWorker()),
-            (route) => false,
-          );
-        } else {
-          _showMessage("Unknown role");
-        }
+        _goToHomeByRole(
+          currentRole: currentRole?.toString(),
+          nextAction: null,
+        );
       } else {
-        final message = data?['message']?.toString() ??
-            data?['error']?.toString() ??
-            'Login failed';
+        final message =
+            data?["message"]?.toString() ??
+            data?["error"]?.toString() ??
+            "Login failed";
+
         _showMessage(message);
       }
     } on DioException catch (e) {
-      final message = e.response?.data?['message']?.toString() ??
-          e.response?.data?['error']?.toString() ??
-          'Login failed';
+      final message =
+          e.response?.data?["message"]?.toString() ??
+          e.response?.data?["error"]?.toString() ??
+          "Login failed";
+
       _showMessage(message);
     } catch (e) {
       _showMessage("Login failed: $e");
@@ -98,7 +127,53 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Reusable labeled input field
+  Future<void> _googleLogin() async {
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      final response = await GoogleAuthService.loginWithGoogle();
+
+      final data = response.data as Map<String, dynamic>?;
+
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          data != null &&
+          data["success"] == true) {
+        final responseData = data["data"] as Map<String, dynamic>?;
+        final userData = responseData?["user"] as Map<String, dynamic>?;
+
+        final currentRole = userData?["currentRole"] ?? userData?["role"];
+        final nextAction = responseData?["nextAction"];
+
+        _showMessage("Google login successful");
+
+        _goToHomeByRole(
+          currentRole: currentRole?.toString(),
+          nextAction: nextAction?.toString(),
+        );
+      } else {
+        _showMessage("Google login failed");
+      }
+    } on DioException catch (e) {
+      final code = e.response?.data?["error"]?["code"]?.toString();
+
+      if (code == "LOCATION_REQUIRED") {
+        _showMessage("This Google account is not registered yet. Please sign up first.");
+      } else {
+        final message =
+            e.response?.data?["message"]?.toString() ??
+            e.response?.data?["error"]?["message"]?.toString() ??
+            e.response?.data?["error"]?.toString() ??
+            "Google login failed";
+
+        _showMessage(message);
+      }
+    } catch (e) {
+      _showMessage(e.toString());
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
+  }
+
   Widget _buildField({
     required String label,
     required String hint,
@@ -125,7 +200,10 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: controller,
           obscureText: obscure,
           keyboardType: keyboardType,
-          style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF1E293B)),
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: const Color(0xFF1E293B),
+          ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: GoogleFonts.inter(
@@ -134,7 +212,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             filled: true,
             fillColor: Colors.white,
-            prefixIcon: Icon(prefixIcon, size: 18, color: const Color(0xFF94A3B8)),
+            prefixIcon: Icon(
+              prefixIcon,
+              size: 18,
+              color: const Color(0xFF94A3B8),
+            ),
             suffixIcon: suffixIcon,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -160,13 +242,46 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _googleButton() {
+    return InkWell(
+      onTap: _isGoogleLoading ? null : _googleLogin,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 64,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFDBEAFE),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: _isGoogleLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.3,
+                    color: Color(0xFF1E40AF),
+                  ),
+                )
+              : Image.asset(
+                  "assets/google.png",
+                  width: 70,
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFEFF6FF),
       body: Column(
         children: [
-          // ── Dark navy header ──
           Container(
             width: double.infinity,
             color: const Color(0xFF0A1628),
@@ -174,7 +289,6 @@ class _LoginScreenState extends State<LoginScreen> {
               bottom: false,
               child: Column(
                 children: [
-                  // Back button row
                   Padding(
                     padding: const EdgeInsets.only(left: 8, top: 4),
                     child: Align(
@@ -189,13 +303,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-
-                  // Logo + title
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
                     child: Column(
                       children: [
-                        // Icon mark
                         Container(
                           width: 65,
                           height: 65,
@@ -213,9 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             size: 40,
                           ),
                         ),
-
                         const SizedBox(height: 16),
-
                         Text(
                           "Welcome back",
                           style: GoogleFonts.inter(
@@ -224,9 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.white,
                           ),
                         ),
-
                         const SizedBox(height: 6),
-
                         Text(
                           "Sign in to your Servify account",
                           style: GoogleFonts.inter(
@@ -242,14 +349,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // ── Form section ──
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Email field
                   _buildField(
                     label: "Email",
                     hint: "Enter your email",
@@ -260,7 +365,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Password field
                   _buildField(
                     label: "Password",
                     hint: "Enter your password",
@@ -275,14 +379,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         size: 18,
                         color: const Color(0xFF94A3B8),
                       ),
-                      onPressed: () =>
-                          setState(() => _hidePassword = !_hidePassword),
+                      onPressed: () {
+                        setState(() => _hidePassword = !_hidePassword);
+                      },
                     ),
                   ),
 
                   const SizedBox(height: 10),
 
-                  // Forgot password
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -311,7 +415,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
-                  // Sign in button
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -348,11 +451,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Divider
                   Row(
                     children: [
                       const Expanded(
-                        child: Divider(color: Color(0xFFDBEAFE), thickness: 1),
+                        child: Divider(
+                          color: Color(0xFFDBEAFE),
+                          thickness: 1,
+                        ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -365,43 +470,27 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const Expanded(
-                        child: Divider(color: Color(0xFFDBEAFE), thickness: 1),
+                        child: Divider(
+                          color: Color(0xFFDBEAFE),
+                          thickness: 1,
+                        ),
                       ),
                     ],
                   ),
 
                   const SizedBox(height: 20),
 
-                  // Social buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Google
-                      InkWell(
-                        onTap: () {},
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          width: 64,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFDBEAFE),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Center(
-                            child: Image.asset("assets/google.png", width: 70),
-                          ),
-                        ),
-                      ),
+                      _googleButton(),
 
                       const SizedBox(width: 12),
 
-                      // Facebook
                       InkWell(
-                        onTap: () {},
+                        onTap: () {
+                          _showMessage("Facebook login is not implemented yet");
+                        },
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
                           width: 64,
@@ -415,8 +504,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           child: Center(
-                            child:
-                                Image.asset("assets/facebook.png", width: 70),
+                            child: Image.asset(
+                              "assets/facebook.png",
+                              width: 70,
+                            ),
                           ),
                         ),
                       ),
@@ -425,7 +516,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 28),
 
-                  // Sign up link
                   Center(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

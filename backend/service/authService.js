@@ -51,6 +51,8 @@ const buildAuthUserResponse = (user) => ({
     : null,
 });
 
+const allowedRoles = new Set(["customer", "worker"]);
+
 const COOLDOWN_SECONDS = 60;
 const CODE_TTL_MINUTES = 15;
 const PENDING_TTL_MINUTES = 30;
@@ -486,7 +488,6 @@ export const googleSignIn = asyncHandler(async (req, res) => {
     throw new BadRequestError("Invalid role", "INVALID_ROLE");
   }
 
-  const normalizedLocation = validateAndNormalizeLocation(location);
 
   const googleUser = await verifyGoogleIdToken(idToken);
 
@@ -508,6 +509,9 @@ export const googleSignIn = asyncHandler(async (req, res) => {
       error: null,
     });
   }
+  
+  const normalizedLocation = validateAndNormalizeLocation(location);
+
 
   const session = await mongoose.startSession();
 
@@ -563,7 +567,7 @@ export const googleSignIn = asyncHandler(async (req, res) => {
               _id: user._id,
               bio: "",
               yearsOfExperience: 0,
-              skills: [],
+              skills: ["pending"],
             },
           ],
           { session },
@@ -654,23 +658,31 @@ export const completeGoogleWorkerProfile = asyncHandler(async (req, res) => {
       }).session(session);
 
       if (alreadyExists) {
-        throw new ConflictError(
-          "Worker profile already exists",
-          "WORKER_PROFILE_ALREADY_EXISTS",
-        );
-      }
-
-      await WorkerProfile.create(
-        [
-          {
+        await WorkerProfile.updateOne(
+        { _id: req.user._id },
+        {
+          $set: {
             _id: req.user._id,
             bio: bio.trim(),
             yearsOfExperience,
             skills: normalizedSkills,
           },
-        ],
+        },
         { session },
       );
+      } else {
+        await WorkerProfile.create(
+          [
+            {
+              _id: req.user._id,
+              bio: bio.trim(),
+              yearsOfExperience,
+              skills: normalizedSkills,
+            },
+          ],
+          { session },
+        );
+      }
 
       await User.updateOne(
         {

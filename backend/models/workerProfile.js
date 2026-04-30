@@ -29,12 +29,13 @@ const workerProfileSchema = new mongoose.Schema(
     },
     skills: {
       type: [String],
-      required: true,
-      set: (skills) => skills.map((s) => s.toLowerCase().trim()),
-      validate: {
-        validator: (v) => Array.isArray(v) && v.length > 0,
-        message: "Worker must have at least one skill",
-      },
+      default: [],
+      set: (skills) =>
+        Array.isArray(skills)
+          ? skills
+            .map((s) => String(s).toLowerCase().trim())
+            .filter(Boolean)
+          : [],
     },
   },
   { timestamps: true },
