@@ -1,4 +1,5 @@
 import ServiceRequest from "../models/serviceRequest.js";
+import Feedback from "../models/feedback.js";
 import User from "../models/user.js";
 import WorkerProfile from "../models/workerProfile.js";
 import Chat from "../models/Chat.js";
@@ -54,9 +55,58 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
       ];
     }
 
-    const docs = await ServiceRequest.find(filter)
+    const requests = await ServiceRequest.find(filter)
       .sort({ createdAt: -1, _id: -1 })
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    let docs = requests;
+
+    if (requiredRole === "customer") {
+      const requestIds = requests.map((request) => request._id);
+
+      const feedbacks = await Feedback.find({
+        requestId: { $in: requestIds },
+        customerId: userId,
+      })
+        .select("requestId")
+        .lean();
+
+      const feedbackRequestIds = new Set(
+        feedbacks.map((feedback) => feedback.requestId.toString())
+      );
+
+      docs = requests.map((request) => ({
+        ...request,
+        hasFeedback: feedbackRequestIds.has(request._id.toString()),
+      }));
+    }
+
+    if (requiredRole === "worker") {
+      const customerIds = requests.map((request) => request.customerId);
+
+      const customers = await User.find({
+        _id: { $in: customerIds },
+      })
+        .select("fullName image")
+        .lean();
+
+      const customerMap = new Map(
+        customers.map((customer) => [
+          customer._id.toString(),
+          customer,
+        ]),
+      );
+      docs = requests.map((request) => {
+        const customer = customerMap.get(request.customerId.toString());
+
+        return {
+          ...request,
+          customerName: customer?.fullName || "Customer",
+          customerImage: customer?.image || null,
+        };
+      });
+    }
 
     const nextCursor =
       docs.length > 0

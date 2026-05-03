@@ -13,6 +13,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:frontend/Follow/Follow_page.dart';
+import 'package:frontend/ai/ai_chat_page.dart';
 
 class SmartWorkerMapPage extends StatefulWidget {
   const SmartWorkerMapPage({super.key});
@@ -895,7 +896,7 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
       case 2:
         return const Center(child: Text("Chat Screen"));
       case 3:
-        return const Center(child: Text("AI Screen"));
+        return const AiChatPage();
       case 4:
         return const CustomerProfileScreen();
       default:

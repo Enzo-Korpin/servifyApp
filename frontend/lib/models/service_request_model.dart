@@ -2,6 +2,8 @@ class ServiceRequestModel {
   final String id;
   final String customerId;
   final String workerId;
+  final String customerName;
+  final String? customerImage;
   final String message;
   final String addressText;
   final String status;
@@ -18,6 +20,8 @@ class ServiceRequestModel {
     required this.id,
     required this.customerId,
     required this.workerId,
+    required this.customerName,
+    required this.customerImage,
     required this.message,
     required this.addressText,
     required this.status,
@@ -38,6 +42,8 @@ class ServiceRequestModel {
       id: json["_id"]?.toString() ?? "",
       customerId: json["customerId"]?.toString() ?? "",
       workerId: json["workerId"]?.toString() ?? "",
+      customerName: json["customerName"]?.toString() ?? "Customer",
+      customerImage: json["customerImage"]?.toString(),
       message: json["message"]?.toString() ?? "",
       addressText: json["addressText"]?.toString() ?? "",
       status: json["status"]?.toString() ?? "pending",
