@@ -10,7 +10,7 @@ class DioClient {
   static Future<void> init() async {
     dio = Dio(
       BaseOptions(
-        baseUrl: 'http://192.168.100.9:5000',
+        baseUrl: 'http://10.0.2.2:5000',
         headers: {
           'Content-Type': 'application/json',
         },

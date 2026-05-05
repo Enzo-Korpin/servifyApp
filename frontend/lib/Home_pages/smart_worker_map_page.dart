@@ -14,6 +14,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:frontend/Follow/Follow_page.dart';
 import 'package:frontend/ai/ai_chat_page.dart';
+import 'package:frontend/notifications/notifications_screen.dart';
+import 'package:frontend/services/notification_service.dart';
 
 class SmartWorkerMapPage extends StatefulWidget {
   const SmartWorkerMapPage({super.key});
@@ -26,6 +28,9 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final MapController _mapController = MapController();
+
+  late final NotificationService _notificationService;
+  int _unreadNotificationsCount = 0;
 
   static const bool _useMap = false;
 
@@ -91,12 +96,18 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
   @override
   void initState() {
     super.initState();
+
+    _notificationService = NotificationService(DioClient.dio);
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+
     _searchController.addListener(_onSearchChanged);
+
     _loadInitialData();
+    _loadNotificationsCount();
   }
 
   @override
@@ -115,6 +126,96 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
     _searchDebounce = Timer(const Duration(milliseconds: 400), () async {
       await _reloadWorkers(reset: true);
     });
+  }
+
+  Future<void> _loadNotificationsCount() async {
+    try {
+      final notifications = await _notificationService.getMyNotifications();
+
+      if (!mounted) return;
+
+      setState(() {
+        _unreadNotificationsCount =
+            notifications.where((item) => !item.isRead).length;
+      });
+    } catch (e) {
+      debugPrint("Failed to load notifications count: $e");
+    }
+  }
+
+  Future<void> _openNotificationsScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationsScreen(
+          notificationService: _notificationService,
+        ),
+      ),
+    );
+
+    await _loadNotificationsCount();
+  }
+
+  Widget _notificationBellButton() {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFF112244).withOpacity(0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF63B3FF).withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        onPressed: _openNotificationsScreen,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(
+              Icons.notifications_none_rounded,
+              color: Color(0xFF63B3FF),
+              size: 23,
+            ),
+            if (_unreadNotificationsCount > 0)
+              Positioned(
+                right: -9,
+                top: -9,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE24B4A),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF112244),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Text(
+                    _unreadNotificationsCount > 9
+                        ? "9+"
+                        : _unreadNotificationsCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadInitialData() async {
@@ -631,7 +732,13 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+
+                    const SizedBox(width: 8),
+
+                    _notificationBellButton(),
+
+                    const SizedBox(width: 8),
+
                     Container(
                       width: 48,
                       height: 48,
@@ -646,12 +753,12 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
                       child: IconButton(
                         padding: EdgeInsets.zero,
                         onPressed: () async {
-                        await Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
-                            builder: (_) => const FollowedWorkersPage(),
+                              builder: (_) => const FollowedWorkersPage(),
                             ),
-                        );
+                          );
                         },
                         icon: const Icon(
                           Icons.favorite_rounded,
@@ -926,7 +1033,13 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
             fontWeight: FontWeight.w600,
           ),
           unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
-          onTap: (index) => setState(() => _selectedIndex = index),
+          onTap: (index) async {
+            setState(() => _selectedIndex = index);
+
+            if (index == 0) {
+              await _loadNotificationsCount();
+            }
+          },
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),

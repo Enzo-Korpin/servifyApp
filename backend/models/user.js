@@ -1,15 +1,18 @@
 import mongoose from "mongoose";
+
 const userSchema = new mongoose.Schema(
   {
     fullName: {
       type: String,
       required: true,
     },
+
     email: {
       type: String,
       required: true,
       unique: true,
     },
+
     password: {
       type: String,
       required: function () {
@@ -17,11 +20,13 @@ const userSchema = new mongoose.Schema(
       },
       select: false,
     },
+
     role: {
       type: String,
       enum: ["customer", "worker"],
       required: true,
     },
+
     currentRole: {
       type: String,
       enum: ["customer", "worker"],
@@ -29,6 +34,7 @@ const userSchema = new mongoose.Schema(
         return this.role;
       },
     },
+
     location: {
       type: {
         type: String,
@@ -41,29 +47,44 @@ const userSchema = new mongoose.Schema(
         required: true,
       },
     },
+
     image: {
       type: String,
     },
+
     isVerified: {
       type: Boolean,
       default: false,
     },
+
+    // Store Firebase Cloud Messaging tokens for push notifications
+    // Array because one user can login from more than one device
+    fcmTokens: [
+      {
+        type: String,
+      },
+    ],
+
     resetPasswordCodeHash: {
       type: String,
       default: null,
     },
+
     resetPasswordCodeExpiry: {
       type: Date,
       default: null,
     },
+
     // resetPasswordResendCount: {
     //   type: Number,
     //   default: 0,
     // },
+
     resetPasswordLastSentAt: {
       type: Date,
       default: null,
     },
+
     authProvider: {
       type: String,
       enum: ["local", "google"],
@@ -77,17 +98,19 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       index: true,
     },
+
     onboardingStatus: {
       type: String,
       enum: ["complete", "worker_profile_required"],
       default: "complete",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 userSchema.index({ location: "2dsphere" });
 userSchema.index({ role: 1, fullName: 1, _id: 1 });
 
 const User = mongoose.model("User", userSchema);
+
 export default User;

@@ -1,17 +1,15 @@
 import ServiceRequest from "../models/serviceRequest.js";
 import Feedback from "../models/feedback.js";
 import User from "../models/user.js";
-import WorkerProfile from "../models/workerProfile.js";
 import Chat from "../models/Chat.js";
 import mongoose from "mongoose";
+import Notification from "../models/notification.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   BadRequestError,
-  UnauthorizedError,
   ForbiddenError,
   NotFoundError,
   ConflictError,
-  PayloadTooLargeError,
 } from "../errors/httpErrors.js";
 
 const getServiceRequestsByRole = (requiredRole, fieldName) => {
@@ -33,6 +31,7 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
     }
 
     const filter = { [fieldName]: userId };
+
     if (status) {
       filter.status = status;
     }
@@ -92,11 +91,9 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
         .lean();
 
       const customerMap = new Map(
-        customers.map((customer) => [
-          customer._id.toString(),
-          customer,
-        ]),
+        customers.map((customer) => [customer._id.toString(), customer])
       );
+
       docs = requests.map((request) => {
         const customer = customerMap.get(request.customerId.toString());
 
@@ -110,7 +107,9 @@ const getServiceRequestsByRole = (requiredRole, fieldName) => {
 
     const nextCursor =
       docs.length > 0
-        ? `${docs[docs.length - 1].createdAt.toISOString()}|${docs[docs.length - 1]._id}`
+        ? `${docs[docs.length - 1].createdAt.toISOString()}|${
+            docs[docs.length - 1]._id
+          }`
         : null;
 
     return res.status(200).json({
@@ -156,14 +155,16 @@ export const createServiceRequest = asyncHandler(async (req, res) => {
       chatId: null,
     });
 
-    return res
-      .status(201)
-      .json({ success: true, data: newRequest, error: null });
+    return res.status(201).json({
+      success: true,
+      data: newRequest,
+      error: null,
+    });
   } catch (error) {
     if (error?.code === 11000) {
       throw new ConflictError(
         "You already have a pending request with this worker",
-        "ALREADY_PENDING_REQUEST",
+        "ALREADY_PENDING_REQUEST"
       );
     }
 
@@ -197,7 +198,7 @@ export const cancelServiceRequest = asyncHandler(async (req, res) => {
         cancelReason: cancelReason || null,
       },
     },
-    { new: true },
+    { new: true }
   );
 
   if (!request) {
@@ -210,13 +211,13 @@ export const cancelServiceRequest = asyncHandler(async (req, res) => {
     if (existingRequest.customerId.toString() !== userId.toString()) {
       throw new ForbiddenError(
         "Not authorized to cancel this request",
-        "FORBIDDEN_CANCEL_REQUEST",
+        "FORBIDDEN_CANCEL_REQUEST"
       );
     }
 
     throw new BadRequestError(
       "Only pending requests can be cancelled",
-      "INVALID_CANCEL_STATUS",
+      "INVALID_CANCEL_STATUS"
     );
   }
 
@@ -249,21 +250,21 @@ export const acceptServiceRequest = asyncHandler(async (req, res) => {
       if (!request) {
         throw new NotFoundError(
           "Service request not found",
-          "REQUEST_NOT_FOUND",
+          "REQUEST_NOT_FOUND"
         );
       }
 
       if (request.workerId.toString() !== req.user._id.toString()) {
         throw new ForbiddenError(
           "Not authorized to accept this request",
-          "FORBIDDEN_ACCEPT_REQUEST",
+          "FORBIDDEN_ACCEPT_REQUEST"
         );
       }
 
       if (request.status !== "pending") {
         throw new BadRequestError(
           `Cannot accept request with status '${request.status}'`,
-          "INVALID_ACCEPT_STATUS",
+          "INVALID_ACCEPT_STATUS"
         );
       }
 
@@ -282,7 +283,7 @@ export const acceptServiceRequest = asyncHandler(async (req, res) => {
                 createdFromRequestId: request._id,
               },
             ],
-            { session },
+            { session }
           ).then((docs) => docs[0]);
         } catch (error) {
           if (error?.code === 11000) {
@@ -301,12 +302,27 @@ export const acceptServiceRequest = asyncHandler(async (req, res) => {
       request.chatId = chat._id;
 
       await request.save({ session });
+
       updatedRequest = request;
     });
 
-    return res
-      .status(200)
-      .json({ success: true, data: updatedRequest, error: null });
+    try {
+      await Notification.create({
+        userId: updatedRequest.customerId,
+        title: "Request Accepted",
+        message: "Your service request has been accepted by the worker.",
+        type: "request_accepted",
+        requestId: updatedRequest._id,
+      });
+    } catch (notificationError) {
+      console.error("Failed to create accept notification:", notificationError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: updatedRequest,
+      error: null,
+    });
   } finally {
     await session.endSession();
   }
@@ -337,7 +353,7 @@ export const rejectServiceRequest = asyncHandler(async (req, res) => {
         rejectReason: rejectReason ? rejectReason.trim() : null,
       },
     },
-    { new: true },
+    { new: true }
   );
 
   if (!request) {
@@ -350,24 +366,41 @@ export const rejectServiceRequest = asyncHandler(async (req, res) => {
     if (existingRequest.workerId.toString() !== req.user._id.toString()) {
       throw new ForbiddenError(
         "Not authorized to reject this request",
-        "FORBIDDEN_REJECT_REQUEST",
+        "FORBIDDEN_REJECT_REQUEST"
       );
     }
 
     throw new BadRequestError(
-      `Cannot reject request in its current state`,
-      "INVALID_REJECT_STATUS",
+      "Cannot reject request in its current state",
+      "INVALID_REJECT_STATUS"
     );
   }
 
-  return res.status(200).json({ success: true, data: request, error: null });
+  try {
+    await Notification.create({
+      userId: request.customerId,
+      title: "Request Rejected",
+      message: "Your service request has been rejected by the worker.",
+      type: "request_rejected",
+      requestId: request._id,
+    });
+  } catch (notificationError) {
+    console.error("Failed to create reject notification:", notificationError);
+  }
+
+  return res.status(200).json({
+    success: true,
+    data: request,
+    error: null,
+  });
 });
 
 export const getServiceRequestsForCustomer = getServiceRequestsByRole(
   "customer",
-  "customerId",
+  "customerId"
 );
+
 export const getServiceRequestsForWorker = getServiceRequestsByRole(
   "worker",
-  "workerId",
+  "workerId"
 );
