@@ -1,5 +1,6 @@
 import Notification from "../models/notification.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import { NotFoundError } from "../errors/httpErrors.js";
 
 export const getMyNotifications = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -30,17 +31,11 @@ export const markNotificationAsRead = asyncHandler(async (req, res) => {
         isRead: true,
       },
     },
-    { new: true }
+    { new: true },
   );
 
   if (!notification) {
-    return res.status(404).json({
-      success: false,
-      data: null,
-      error: {
-        message: "Notification not found",
-      },
-    });
+    throw new NotFoundError("Notification not found", "NOTIFICATION_NOT_FOUND");
   }
 
   return res.status(200).json({
@@ -62,12 +57,12 @@ export const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
       $set: {
         isRead: true,
       },
-    }
+    },
   );
 
   return res.status(200).json({
     success: true,
-    message: "All notifications marked as read",
+    data: null,
     error: null,
   });
 });

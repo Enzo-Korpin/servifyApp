@@ -10,17 +10,19 @@ import customerRoutes from "./routes/customerRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import aiRoutes from "./ai/ai.routes.js";
-import notificationRoutes from "./routes/notification.routes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { connectDB } from "./db/connectDB.js";
 import { RouteNotFound } from "./middleware/routeNoteFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 // dotenv.config();
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 

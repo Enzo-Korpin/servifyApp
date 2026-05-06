@@ -3,7 +3,7 @@ import {
   getMyNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
-} from "../controllers/notification.controller.js";
+} from "../service/notificationService.js";
 import { protectRoute } from "../middleware/protecteRoute.js";
 
 const router = express.Router();
