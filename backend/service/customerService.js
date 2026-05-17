@@ -327,6 +327,68 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
   });
 });
 
+const attachOsrmDistances = async ({ customerLat, customerLng, workers }) => {
+  if (!workers.length) return workers;
+
+  const validWorkers = workers.filter((worker) => {
+    const coords = worker.location?.coordinates;
+    return Array.isArray(coords) && coords.length === 2;
+  });
+
+  if (!validWorkers.length) return workers;
+
+  const coordinates = [
+    `${customerLng},${customerLat}`,
+    ...validWorkers.map((worker) => {
+      const [workerLng, workerLat] = worker.location.coordinates;
+      return `${workerLng},${workerLat}`;
+    }),
+  ].join(";");
+
+  const destinations = validWorkers.map((_, index) => index + 1).join(";");
+
+  const url = new URL(
+    `https://router.project-osrm.org/table/v1/driving/${coordinates}`,
+  );
+
+  url.searchParams.set("sources", "0");
+  url.searchParams.set("destinations", destinations);
+  url.searchParams.set("annotations", "distance,duration");
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) return workers;
+
+    const data = await response.json();
+
+    const distances = data?.distances?.[0];
+    const durations = data?.durations?.[0];
+
+    if (!Array.isArray(distances) || !Array.isArray(durations)) {
+      return workers;
+    }
+
+    validWorkers.forEach((worker, index) => {
+      const roadDistanceMeters = distances[index];
+      const roadDurationSeconds = durations[index];
+
+      if (roadDistanceMeters == null || roadDurationSeconds == null) return;
+
+      worker.roadDistanceMeters = roadDistanceMeters;
+      worker.roadDurationSeconds = roadDurationSeconds;
+      worker.roadDistanceKm = Number((roadDistanceMeters / 1000).toFixed(1));
+      worker.roadDurationMinutes = Math.round(roadDurationSeconds / 60);
+    });
+
+    return workers;
+  } catch {
+    return workers;
+  }
+};
+
 export const searchFilteredWorkers = asyncHandler(async (req, res) => {
   const {
     lat,
@@ -408,47 +470,49 @@ export const searchFilteredWorkers = asyncHandler(async (req, res) => {
 
     if (sort === "distance") {
       pipeline.push({
-        $match: order === "asc"
-          ? {
-              $or: [
-                { distanceMeters: { $gt: afterValue } },
-                {
-                  distanceMeters: afterValue,
-                  _id: { $gt: afterObjectId },
-                },
-              ],
-            }
-          : {
-              $or: [
-                { distanceMeters: { $lt: afterValue } },
-                {
-                  distanceMeters: afterValue,
-                  _id: { $gt: afterObjectId },
-                },
-              ],
-            },
+        $match:
+          order === "asc"
+            ? {
+                $or: [
+                  { distanceMeters: { $gt: afterValue } },
+                  {
+                    distanceMeters: afterValue,
+                    _id: { $gt: afterObjectId },
+                  },
+                ],
+              }
+            : {
+                $or: [
+                  { distanceMeters: { $lt: afterValue } },
+                  {
+                    distanceMeters: afterValue,
+                    _id: { $gt: afterObjectId },
+                  },
+                ],
+              },
       });
     } else {
       pipeline.push({
-        $match: order === "asc"
-          ? {
-              $or: [
-                { ratingValue: { $gt: afterValue } },
-                {
-                  ratingValue: afterValue,
-                  _id: { $gt: afterObjectId },
-                },
-              ],
-            }
-          : {
-              $or: [
-                { ratingValue: { $lt: afterValue } },
-                {
-                  ratingValue: afterValue,
-                  _id: { $gt: afterObjectId },
-                },
-              ],
-            },
+        $match:
+          order === "asc"
+            ? {
+                $or: [
+                  { ratingValue: { $gt: afterValue } },
+                  {
+                    ratingValue: afterValue,
+                    _id: { $gt: afterObjectId },
+                  },
+                ],
+              }
+            : {
+                $or: [
+                  { ratingValue: { $lt: afterValue } },
+                  {
+                    ratingValue: afterValue,
+                    _id: { $gt: afterObjectId },
+                  },
+                ],
+              },
       });
     }
   }
@@ -474,13 +538,19 @@ export const searchFilteredWorkers = asyncHandler(async (req, res) => {
           ratingCount: "$ratingCountValue",
         },
       },
-    }
+    },
   );
 
   const workers = await User.aggregate(pipeline);
 
   const hasNextPage = workers.length > LIMIT;
   const slicedWorkers = hasNextPage ? workers.slice(0, LIMIT) : workers;
+
+  const workersWithRoadDistance = await attachOsrmDistances({
+    customerLat: Number(lat),
+    customerLng: Number(lng),
+    workers: slicedWorkers,
+  });
 
   const lastWorker = slicedWorkers[slicedWorkers.length - 1] ?? null;
 
@@ -497,7 +567,7 @@ export const searchFilteredWorkers = asyncHandler(async (req, res) => {
   return res.status(200).json({
     success: true,
     data: {
-      workers: slicedWorkers,
+      workers: workersWithRoadDistance,
       nextCursor,
     },
     error: null,

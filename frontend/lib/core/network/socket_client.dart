@@ -30,49 +30,46 @@ class SocketClient {
   Future<String?> _loadTokenFromCookieJar() async {
     final cookieJar = DioClient.cookieJar;
     if (cookieJar == null) {
-      print("ERROR: CookieJar is null!");
+
       return null;
     }
 
     final baseUri = Uri.parse(DioClient.dio.options.baseUrl);
     final List<Cookie> cookies = await cookieJar.loadForRequest(baseUri);
 
-    print("DEBUG _loadTokenFromCookieJar: Found ${cookies.length} cookies");
     for (final cookie in cookies) {
-      print("DEBUG CookieJar contains: ${cookie.name}=${cookie.value.substring(0, 30)}...");
+
     }
 
     for (final cookie in cookies) {
       if (cookie.name == 'token' && cookie.value.trim().isNotEmpty) {
         final token = cookie.value;
-        print("DEBUG: Using token: ${token.substring(0, 50)}...");
-        
+
         // Decode to verify which user this token belongs to
         try {
           final parts = token.split('.');
           if (parts.length == 3) {
             final decodedPayload = utf8.decode(base64Url.decode(parts[1] + '=='));
-            print("DEBUG: Token payload: $decodedPayload");
+
           }
         } catch (e) {
-          print("DEBUG: Could not decode token: $e");
+
         }
         
         return token;
       }
     }
 
-    print("ERROR: No valid token cookie found in jar!");
     return null;
   }
 
   Future<void> connect() async {
     if (isConnected) {
-      print("DEBUG: Socket already connected, skipping");
+
       return;
     }
     if (_connecting != null) {
-      print("DEBUG: Socket already connecting, awaiting...");
+
       return _connecting!;
     }
 
@@ -80,13 +77,11 @@ class SocketClient {
     _connecting = completer.future;
 
     final baseUrl = DioClient.dio.options.baseUrl.replaceFirst(RegExp(r'/$'), '');
-    
-    print("DEBUG Socket.connect: Loading token from CookieJar...");
+
     final token = await _loadTokenFromCookieJar();
-    print("DEBUG Socket.connect: Token loaded: ${token != null ? '${token.substring(0, 20)}...' : 'NULL'}");
 
     if (token == null) {
-      print("ERROR: No token found in CookieJar! Cannot connect socket.");
+
       _connecting = null;
       if (!completer.isCompleted) {
         completer.completeError("No token available");
@@ -113,23 +108,22 @@ class SocketClient {
     // options['auth'] = {'token': token};
     // options['extraHeaders'] = extraHeaders;
 
-    print("DEBUG Socket.connect: Creating new socket instance...");
     final socket = IO.io(baseUrl, options);
     _socket = socket;
 
     socket.on('connect', (_) {
-      print("DEBUG Socket: Connected successfully");
+
       _connectionController.add(true);
       if (!completer.isCompleted) completer.complete();
     });
 
     socket.on('disconnect', (_) {
-      print("DEBUG Socket: Disconnected");
+
       _connectionController.add(false);
     });
 
     socket.on('connect_error', (error) {
-      print("DEBUG Socket: Connection error: $error");
+
       _connectionController.add(false);
       _errorController.add(error?.toString() ?? 'Socket connection failed');
       if (!completer.isCompleted) completer.complete();
@@ -154,18 +148,17 @@ class SocketClient {
       _errorController.add(_extractErrorMessage(payload));
     });
 
-    print("DEBUG Socket.connect: Calling socket.connect()...");
     socket.connect();
 
     await completer.future.timeout(
       const Duration(seconds: 4),
       onTimeout: () {
-        print("WARNING: Socket connection timed out after 4 seconds");
+
       },
     );
 
     _connecting = null;
-    print("DEBUG Socket.connect: Connect sequence complete");
+
   }
 
   void joinChat(String chatId) {
@@ -198,8 +191,6 @@ class SocketClient {
       if (cleanText != null && cleanText.isNotEmpty) 'text': cleanText,
       if (image != null && image.trim().isNotEmpty) 'image': image,
     };
-    
-    print("DEBUG SocketClient.sendMessage emitting: $payload");
 
     _socket?.emit('send_message', payload);
   }
@@ -252,10 +243,9 @@ class SocketClient {
 }
 
   void disconnect() {
-    print("DEBUG Socket.disconnect: Starting cleanup...");
-    
+
     if (_socket != null) {
-      print("DEBUG Socket.disconnect: Disconnecting socket");
+
       _socket?.disconnect();
       _socket?.dispose();
     }
@@ -266,7 +256,7 @@ class SocketClient {
     // Clear all event listeners by resetting streams
     // This ensures no old handlers persist
     _connectionController.add(false);
-    
-    print("DEBUG Socket.disconnect: Cleanup complete, socket is null");
+
   }
 }
+

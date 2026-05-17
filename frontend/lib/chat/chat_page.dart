@@ -86,7 +86,7 @@ Future<void> _initializeChat() async {
 
     try {
       _users = await _chatService.getChatUsers();
-      print("DEBUG: Loaded users: ${_users.map((u) => '${u.fullName}(${u.id})').join(', ')}");
+
       _errorMessage = null;
     } catch (error) {
       _errorMessage = error.toString();
@@ -96,8 +96,7 @@ Future<void> _initializeChat() async {
   }
 
   Future<void> _openConversation(ChatUserModel user) async {
-    print("DEBUG: Opening conversation with user: ${user.fullName} (${user.id})");
-    
+
     if (_joinedChatId != null) {
       SocketClient.instance.leaveChat(_joinedChatId!);
     }
@@ -204,8 +203,6 @@ Future<void> _initializeChat() async {
     final imageFile = _selectedImageFile;
     final currentUserId = _currentUser?.id ?? "unknown";
 
-    print("DEBUG _sendMessage: currentUser=$currentUserId, selectedUser=${selectedUser?.id}, text='$text', hasImage=${imageFile != null}");
-    
     if (selectedUser == null || (text.isEmpty && imageFile == null) || _sending) return;
 
     _messageController.clear();
@@ -860,3 +857,4 @@ Future<void> _initializeChat() async {
     );
   }
 }
+

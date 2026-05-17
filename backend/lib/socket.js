@@ -35,7 +35,6 @@ const extractTokenFromSocket = (socket) => {
 const authenticateSocket = async (socket, next) => {
   try {
     const token = extractTokenFromSocket(socket);
-    console.log("DEBUG authenticateSocket: Extracted token:", token ? `${token.substring(0, 30)}...` : "NULL");
 
     if (!token) {
       const error = new Error("Unauthorized - No Token Provided");
@@ -44,7 +43,6 @@ const authenticateSocket = async (socket, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("DEBUG authenticateSocket: Token decoded, userId:", decoded.userId);
 
     const user = await User.findById(decoded.userId)
       .select("_id fullName image role currentRole onboardingStatus")
@@ -53,15 +51,14 @@ const authenticateSocket = async (socket, next) => {
     if (!user) {
       const error = new Error("Unauthorized - User Not Found");
       error.code = "USER_NOT_FOUND";
-      console.log("DEBUG authenticateSocket: User not found for userId:", decoded.userId);
+
       return next(error);
     }
 
-    console.log("DEBUG authenticateSocket: SUCCESS - Authenticated as user:", user._id, user.fullName);
     socket.user = user;
     next();
   } catch (error) {
-    console.log("DEBUG authenticateSocket: ERROR -", error.message);
+
     const authError = new Error("Unauthorized - Invalid or Expired Token");
     authError.code = "INVALID_TOKEN";
     next(authError);
@@ -155,12 +152,11 @@ export const initSocket = (httpServer, options = {}) => {
 
   io.on("connection", (socket) => {
     const currentUserId = String(socket.user._id);
-    console.log(`\n=== NEW SOCKET CONNECTION ===`);
-    console.log(`Socket ID: ${socket.id}`);
-    console.log(`User ID: ${currentUserId}`);
-    console.log(`User Name: ${socket.user.fullName}`);
-    console.log(`Role: ${socket.user.currentRole || socket.user.role}`);
-    console.log(`=============================\n`);
+
+
+
+
+
 
     socket.join(userRoom(currentUserId));
 
@@ -212,12 +208,9 @@ export const initSocket = (httpServer, options = {}) => {
       try {
         ensureOnboardingComplete(socket);
 
-        console.log("DEBUG socket send_message received payload:", payload);
-        console.log("DEBUG socket currentUserId:", currentUserId);
-        console.log("DEBUG socket.user._id:", socket.user._id);
+
 
         const receiverId = normalizeObjectId(payload.receiverId ?? payload.to ?? payload.userId ?? payload.id);
-        console.log("DEBUG normalized receiverId:", receiverId);
 
         if (!receiverId) {
           const error = new Error("Invalid receiverId");
@@ -245,7 +238,7 @@ export const initSocket = (httpServer, options = {}) => {
         }
 
         const normalizedSenderId = normalizeObjectId(currentUserId);
-        console.log("DEBUG normalized senderId:", normalizedSenderId);
+
         if (String(normalizedSenderId) === String(receiverId)) {
           const error = new Error("Cannot send message to yourself");
           error.code = "SELF_MESSAGE_NOT_ALLOWED";
@@ -311,3 +304,4 @@ export const initSocket = (httpServer, options = {}) => {
 
   return io;
 };
+

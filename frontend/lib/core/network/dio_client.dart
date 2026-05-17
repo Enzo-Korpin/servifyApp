@@ -56,14 +56,13 @@ class DioClient {
   }
 
   static Future<void> resetCookieJarCompletely() async {
-    print("DEBUG: NUCLEAR COOKIE RESET - Deleting persistent storage...");
 
     final dir = Directory(_cookieStorePath);
 
     if (await dir.exists()) {
-      print("DEBUG: Cookie storage dir exists, deleting...");
+
       await dir.delete(recursive: true);
-      print("DEBUG: Cookie storage deleted successfully");
+
     }
 
     cookieJar = PersistCookieJar(
@@ -72,9 +71,7 @@ class DioClient {
 
     _attachInterceptors();
 
-    print("DEBUG: Fresh CookieJar created and attached to Dio");
-
     final cookies = await cookieJar.loadForRequest(Uri.parse(baseUrl));
-    print("DEBUG: After reset, cookie count: ${cookies.length} (should be 0)");
+
   }
 }

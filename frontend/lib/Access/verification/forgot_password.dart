@@ -34,7 +34,6 @@ Future<void> _sendVerificationCode() async {
   if (!_formKey.currentState!.validate()) return;
 
   final email = _emailController.text.trim();
-  debugPrint("FORGOT PASSWORD EMAIL: [$email]");
 
   setState(() => _isSending = true);
 
@@ -46,8 +45,6 @@ Future<void> _sendVerificationCode() async {
       },
     );
 
-    debugPrint("FORGOT PASSWORD STATUS: ${response.statusCode}");
-    debugPrint("FORGOT PASSWORD BODY: ${response.data}");
 
     if (!mounted) return;
 

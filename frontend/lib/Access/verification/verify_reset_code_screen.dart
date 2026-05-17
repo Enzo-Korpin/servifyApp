@@ -145,8 +145,6 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
         },
       );
 
-      debugPrint("VERIFY RESET STATUS: ${response.statusCode}");
-      debugPrint("VERIFY RESET BODY: ${response.data}");
 
       if (response.statusCode == 200) {
         _showMessage(
@@ -168,7 +166,6 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
         _showMessage("Invalid or expired verification code");
       }
     } on DioException catch (e) {
-      debugPrint("VERIFY RESET ERROR: ${e.response?.data}");
 
       final message =
           e.response?.data?["message"]?.toString() ??
@@ -200,8 +197,6 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
         },
       );
 
-      debugPrint("RESEND RESET CODE STATUS: ${response.statusCode}");
-      debugPrint("RESEND RESET CODE BODY: ${response.data}");
 
       _showMessage(
         "Verification code sent again",

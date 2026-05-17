@@ -144,8 +144,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
       },
     );
 
-    debugPrint("RESET PASSWORD STATUS: ${response.statusCode}");
-    debugPrint("RESET PASSWORD BODY: ${response.data}");
 
     _showSnack("Password reset successfully", isError: false);
 

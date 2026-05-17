@@ -254,8 +254,7 @@ const uploadMessageImage = async (image) => {
 };
 
 export const createMessage = async ({ senderId, receiverId, text, image }) => {
-  console.log("DEBUG createMessage:", { senderId, receiverId, isSame: String(senderId) === String(receiverId) });
-  
+
   assertValidObjectId(senderId, "Invalid senderId", "INVALID_SENDER_ID");
   assertValidObjectId(receiverId, "Invalid receiverId", "INVALID_RECEIVER_ID");
 

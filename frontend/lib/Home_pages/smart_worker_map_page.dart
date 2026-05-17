@@ -33,10 +33,10 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
   late final NotificationService _notificationService;
   int _unreadNotificationsCount = 0;
 
-  static const bool _useMap = false;
+  static const bool _useMap = true;
 
   Timer? _searchDebounce;
-
+  List<LatLng> _routePoints = [];
   int _selectedIndex = 0;
   bool _isGettingLocation = false;
   bool _isLoadingWorkers = false;
@@ -129,6 +129,55 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
     });
   }
 
+Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
+  if (_userLat == null || _userLng == null) return;
+
+  final workerLat = worker["lat"] as double;
+  final workerLng = worker["lng"] as double;
+
+  try {
+    final response = await Dio().get(
+      "https://router.project-osrm.org/route/v1/driving/"
+      "$_userLng,$_userLat;$workerLng,$workerLat",
+      queryParameters: {
+        "overview": "full",
+        "geometries": "geojson",
+      },
+    );
+
+    final routes = response.data["routes"] as List;
+
+    if (routes.isEmpty) {
+      _showMessage("No route found");
+      return;
+    }
+
+    final route = routes.first;
+    final coords = route["geometry"]["coordinates"] as List;
+
+    final points = coords.map<LatLng>((coord) {
+      final lng = (coord[0] as num).toDouble();
+      final lat = (coord[1] as num).toDouble();
+      return LatLng(lat, lng);
+    }).toList();
+
+    final distanceKm = ((route["distance"] as num).toDouble() / 1000);
+    final durationMin = ((route["duration"] as num).toDouble() / 60);
+
+    if (!mounted) return;
+
+    setState(() {
+      _routePoints = points;
+    });
+
+    _showMessage(
+      "Route: ${distanceKm.toStringAsFixed(1)} km • ${durationMin.toStringAsFixed(0)} min",
+    );
+  } catch (e) {
+    _showMessage("Failed to load route");
+  }
+}
+
   Future<void> _loadNotificationsCount() async {
     try {
       final notifications = await _notificationService.getMyNotifications();
@@ -140,7 +189,7 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
             notifications.where((item) => !item.isRead).length;
       });
     } catch (e) {
-      debugPrint("Failed to load notifications count: $e");
+
     }
   }
 
@@ -419,6 +468,16 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
 
       final mappedWorkers = _mapWorkersFromApi(rawWorkers);
 
+      if (_activeSort == "distance") {
+        mappedWorkers.sort((a, b) {
+          final aDistance = (a["distanceValue"] as num).toDouble();
+          final bDistance = (b["distanceValue"] as num).toDouble();
+
+          return _distanceAscending
+              ? aDistance.compareTo(bDistance)
+              : bDistance.compareTo(aDistance);
+        });
+      }
       if (!mounted) return;
 
       setState(() {
@@ -472,6 +531,11 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
           : 0.0;
 
       final skills = List<String>.from(profile["skills"] ?? []);
+      final roadDistanceKm = worker["roadDistanceKm"];
+      final roadDurationMinutes = worker["roadDurationMinutes"];
+
+      final fallbackDistanceKm =
+          ((worker["distanceMeters"] ?? 0) as num).toDouble() / 1000;
 
       return {
         "_id": worker["_id"],
@@ -479,12 +543,14 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
         "job": _resolveMainJob(skills),
         "skills": skills,
         "rating": ((profile["rate"] ?? 0) as num).toDouble(),
-        "ratingCount":
-            profile["ratingCount"] ?? profile["numberOfRatings"] ?? 0,
+        "ratingCount": profile["ratingCount"] ?? profile["numberOfRatings"] ?? 0,
         "distanceMeters": (worker["distanceMeters"] ?? 0) as num,
-        "distanceValue": ((worker["distanceMeters"] ?? 0) as num) / 1000,
-        "distance":
-            "${(((worker["distanceMeters"] ?? 0) as num) / 1000).toStringAsFixed(1)} km",
+        "distanceValue": roadDistanceKm != null
+            ? (roadDistanceKm as num).toDouble()
+            : fallbackDistanceKm,
+        "distance": roadDistanceKm != null && roadDurationMinutes != null
+            ? "${(roadDistanceKm as num).toDouble().toStringAsFixed(1)} km • $roadDurationMinutes min"
+            : "${fallbackDistanceKm.toStringAsFixed(1)} km",
         "lat": lat,
         "lng": lng,
         "image": worker["image"],
@@ -611,6 +677,16 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
             userAgentPackageName: AppMapConfig.userAgent,
             tileProvider: FMTCStore(AppMapConfig.storeName).getTileProvider(),
           ),
+           if (_routePoints.isNotEmpty)
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: _routePoints,
+                  strokeWidth: 6,
+                  color: const Color(0xFFE24B4A),
+                ),
+              ],
+            ),
           MarkerLayer(
             markers: [
               Marker(
@@ -967,8 +1043,11 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
                                   }
 
                                   if (i >= _slideAnimations.length) {
-                                    return WorkerCard(
-                                      worker: visibleWorkers[i],
+                                    return GestureDetector(
+                                      onTap: () => _showRouteToWorker(visibleWorkers[i]),
+                                      child: WorkerCard(
+                                        worker: visibleWorkers[i],
+                                      ),
                                     );
                                   }
 
@@ -976,8 +1055,11 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
                                     opacity: _fadeAnimations[i],
                                     child: SlideTransition(
                                       position: _slideAnimations[i],
-                                      child: WorkerCard(
-                                        worker: visibleWorkers[i],
+                                      child: GestureDetector(
+                                        onTap: () => _showRouteToWorker(visibleWorkers[i]),
+                                        child: WorkerCard(
+                                          worker: visibleWorkers[i],
+                                        ),
                                       ),
                                     ),
                                   );

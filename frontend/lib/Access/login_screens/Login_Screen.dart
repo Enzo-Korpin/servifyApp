@@ -87,13 +87,11 @@ Future<void> _login() async {
   setState(() => _isLoading = true);
 
   try {
-    print("DEBUG Login: Step 1 - Disconnect old socket");
+
     SocketClient.instance.disconnect();
 
-    print("DEBUG Login: Step 2 - NUCLEAR cookie reset");
     await DioClient.resetCookieJarCompletely();
 
-    print("DEBUG Login: Step 3 - POST /api/auth/login");
     final response = await DioClient.dio.post(
       "/api/auth/login",
       data: {
@@ -124,12 +122,11 @@ Future<void> _login() async {
         }
 
         if (tokenCookie != null) {
-          print("DEBUG Login: Token cookie is ready");
+
           tokenReady = true;
           break;
         }
 
-        print("DEBUG Login: Waiting for token cookie...");
         await Future.delayed(const Duration(milliseconds: 200));
       }
 
@@ -137,13 +134,10 @@ Future<void> _login() async {
         throw Exception("Token cookie was not persisted after login");
       }
 
-      print("DEBUG Login: Step 5 - Reconnect socket fresh");
       await SocketClient.instance.reconnectFresh();
 
       final userData = data["data"] as Map<String, dynamic>?;
       final currentRole = userData?["currentRole"] ?? userData?["role"];
-
-      print("DEBUG Login: Step 6 - Navigate to home by role: $currentRole");
 
       _showMessage("Login successful");
 

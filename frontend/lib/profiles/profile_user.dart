@@ -349,16 +349,13 @@ Future<void> logoutUser() async {
   });
 
   try {
-    print("DEBUG Logout: Step 1 - Disconnecting socket");
+
     SocketClient.instance.disconnect();
     await Future.delayed(const Duration(milliseconds: 200)); // Let disconnect complete
 
-    print("DEBUG Logout: Step 2 - POST /api/auth/logout");
     await DioClient.dio.post("/api/auth/logout");
 
-    print("DEBUG Logout: Step 3 - NUCLEAR cookie reset (delete persistent storage)");
     await DioClient.resetCookieJarCompletely();
-    print("DEBUG Logout: Cookie storage completely reset");
 
     if (!mounted) return;
 
@@ -366,13 +363,12 @@ Future<void> logoutUser() async {
       const SnackBar(content: Text("Logged out successfully")),
     );
 
-    print("DEBUG Logout: Step 4 - Navigating to SelectType");
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => SelectType()),
       (route) => false,
     );
   } catch (e) {
-    print("DEBUG Logout: ERROR - $e");
+
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
