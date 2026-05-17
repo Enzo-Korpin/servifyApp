@@ -6,10 +6,13 @@ import '../services/worker_request_service.dart';
 import '../services/account_switch_service.dart';
 import '../requests/Widgets/worker_order_card.dart';
 import '../Access/login_screens/Login_Screen.dart';
+import '../Access/login_screens/select_type.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/worker/worker_profile_screen.dart';
 import 'package:frontend/chat/chat_page.dart';
 import 'package:frontend/ai/ai_chat_page.dart';
+import 'package:frontend/core/network/socket_client.dart';
+import 'package:frontend/core/network/dio_client.dart';
 
 class _StatusState {
   static const Object _unset = Object();
@@ -82,6 +85,7 @@ class _HomeWorkerState extends State<HomeWorker>
   bool _isInitialLoading = true;
   bool _isActionLoading = false;
   bool _isSwitchingAccount = false;
+  bool _isLoggingOut = false;
   String? _globalError;
 
   int _selectedIndex = 0;
@@ -519,6 +523,125 @@ class _HomeWorkerState extends State<HomeWorker>
         backgroundColor: _navyMid,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> logoutUser() async {
+    if (_isLoggingOut) return;
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    try {
+      SocketClient.instance.disconnect();
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      await DioClient.dio.post("/api/auth/logout");
+
+      await DioClient.resetCookieJarCompletely();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Logged out successfully")),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SelectType()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Logout failed: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
+  Future<void> confirmLogout() async {
+    if (_isLoggingOut) return;
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Logout"),
+          content: const Text("Are you sure you want to logout?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("Logout"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout == true) {
+      await logoutUser();
+    }
+  }
+
+  Widget _buildMainActionButton({
+    required String text,
+    required Color backgroundColor,
+    required Color textColor,
+    required VoidCallback onPressed,
+    IconData? icon,
+    bool isBusy = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: isBusy ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: backgroundColor,
+          disabledBackgroundColor: backgroundColor.withOpacity(0.6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: isBusy
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: textColor, size: 18),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    text,
+                    style: GoogleFonts.inter(
+                      color: textColor,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -1068,32 +1191,45 @@ class _HomeWorkerState extends State<HomeWorker>
           _buildNavyHeader(),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: () async {
-                final updated = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => const WorkerProfileScreen(),
+            child: Column(
+              children: [
+                ElevatedButton(
+                  onPressed: () async {
+                    final updated = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => const WorkerProfileScreen(),
+                      ),
+                    );
+                    if (updated == true && mounted) {
+                      await _loadInitialData();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _navyMid,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                );
-                if (updated == true && mounted) {
-                  await _loadInitialData();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _navyMid,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  child: Text(
+                    "Edit Profile",
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
-              ),
-              child: Text(
-                "Edit Profile",
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                const SizedBox(height: 12),
+                _buildMainActionButton(
+                  text: "Logout",
+                  icon: Icons.logout_rounded,
+                  backgroundColor: const Color(0xFFFFEAEA),
+                  textColor: const Color(0xFFFF6B6B),
+                  onPressed: confirmLogout,
+                  isBusy: _isLoggingOut,
                 ),
-              ),
+              ],
             ),
           ),
         ],

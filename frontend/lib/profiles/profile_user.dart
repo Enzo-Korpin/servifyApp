@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
@@ -239,49 +239,57 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     );
   }
 
-  Future<void> updateProfile() async {
-    if (nameController.text.trim().isEmpty) return;
+ Future<void> updateProfile() async {
+  if (nameController.text.trim().isEmpty) return;
 
-    try {
-      final response = await DioClient.dio.put(
-        "/api/customer/profile",
-        data: {
-          "fullName": nameController.text.trim(),
-          "image": imageUrl,
-        },
-      );
+  String? base64Image;
 
-      final data = response.data["data"];
-
-      setState(() {
-        name = data["fullName"];
-        imageUrl = data["image"] ?? "";
-        isEditing = false;
-      });
-
-      _nameFocusNode.unfocus();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile updated")),
-      );
-    } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Update failed";
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Update failed")),
-      );
-    }
+  if (_pickedImageFile != null) {
+    final bytes = await _pickedImageFile!.readAsBytes();
+    base64Image = "data:image/jpeg;base64,${base64Encode(bytes)}";
   }
+
+  try {
+    final response = await DioClient.dio.put(
+      "/api/customer/profile",
+      data: {
+        "fullName": nameController.text.trim(),
+        "image": base64Image ?? imageUrl,
+      },
+    );
+
+    final data = response.data["data"];
+
+    setState(() {
+      name = data["fullName"] ?? nameController.text.trim();
+      imageUrl = data["image"] ?? "";
+      _pickedImageFile = null;
+      isEditing = false;
+    });
+
+    _nameFocusNode.unfocus();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Profile updated")),
+    );
+  } on DioException catch (e) {
+    final message =
+        e.response?.data?["message"]?.toString() ??
+        e.response?.data?["error"]?.toString() ??
+        "Update failed";
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Update failed")),
+    );
+  }
+}
 
   Future<void> switchAccount() async {
     if (authUser == null) return;

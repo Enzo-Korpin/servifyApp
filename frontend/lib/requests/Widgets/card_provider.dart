@@ -22,7 +22,7 @@ class Car_provider extends StatelessWidget {
     switch (skill) {
       case "plumbing":
         return "Plumber";
-      case "electricity":
+      case "Electrical":
       case "electrical":
         return "Electrician";
       case "painting":

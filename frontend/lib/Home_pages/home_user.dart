@@ -67,7 +67,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     Category(
       key: "Electrical",
       value: "assets/electrsian.png",
-      apiSkill: "electricity",
+      apiSkill: "Electrical",
       workerType: "Electrician",
     ),
     Category(
@@ -450,7 +450,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   String _resolveMainJob(List<String> skills) {
     final n = skills.map((e) => e.toLowerCase().trim()).toList();
     if (n.contains('plumbing')) return 'Plumber';
-    if (n.contains('electricity') || n.contains('electrical'))
+    if (n.contains('Electrical') || n.contains('electrical'))
       return 'Electrician';
     if (n.contains('painting')) return 'Painter';
     if (n.contains('cleaning')) return 'Cleaner';
@@ -623,7 +623,7 @@ Future<void> _onCategoryTap(Category category) async {
         // ── Map fills the full screen behind everything ──
         Positioned.fill(child: _buildMapOrPlaceholder(visibleWorkers)),
 
-        // ── Top bar: search + notification icon ──
+        // ── Top bar: profile image + search + notification icon ──
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),

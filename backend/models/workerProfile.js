@@ -32,9 +32,11 @@ const workerProfileSchema = new mongoose.Schema(
       default: [],
       set: (skills) =>
         Array.isArray(skills)
-          ? skills
-            .map((s) => String(s).toLowerCase().trim())
-            .filter(Boolean)
+          ? [...new Set(
+            skills
+              .map((s) => String(s).toLowerCase().trim())
+              .filter(Boolean)
+          )]
           : [],
     },
   },

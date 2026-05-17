@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import User from "../models/user.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
+import cloudinary from "../lib/cloudinary.js";
 import {
   BadRequestError,
   UnauthorizedError,
@@ -9,8 +10,9 @@ import {
   ConflictError,
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
+// import { worker } from "cluster";
 
-export const getCustomerProfile = asyncHandler(async (req, res) => { 
+export const getCustomerProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   if (req.user.currentRole !== "customer") {
     throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
@@ -19,21 +21,59 @@ export const getCustomerProfile = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, data: customerProfile, error: null });
 });
 
+const uploadProfileImageIfNeeded = async (image) => {
+  if (!image || typeof image !== "string") return image;
+
+  const trimmedImage = image.trim();
+
+  if (!trimmedImage.startsWith("data:image")) {
+    return trimmedImage;
+  }
+
+  const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+  const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3);
+
+  if (trimmedImage.length > MAX_BASE64_LENGTH) {
+    throw new PayloadTooLargeError("Image too large");
+  }
+
+  const uploadResponse = await cloudinary.uploader.upload(trimmedImage, {
+    folder: "avatar",
+    resource_type: "image",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  });
+
+  return uploadResponse.secure_url;
+};
+
 export const updateCustomerProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const {fullName, image} = req.body;
+  const { fullName, image } = req.body;
+
   if (req.user.currentRole !== "customer") {
     throw new ForbiddenError("Must be Customer", "ROLE_FORBIDDEN");
   }
+
   if (!fullName) {
     throw new BadRequestError("Full name is required", "MISSING_FULL_NAME");
   }
+
+  const imageUrl = await uploadProfileImageIfNeeded(image);
+
   const updatedCustomer = await User.findByIdAndUpdate(
     userId,
-    { fullName, image },
+    {
+      fullName,
+      image: imageUrl,
+    },
     { new: true, runValidators: true },
   ).select("fullName image");
-  return res.status(200).json({ success: true, data: updatedCustomer, error: null });
+
+  return res.status(200).json({
+    success: true,
+    data: updatedCustomer,
+    error: null,
+  });
 });
 
 
@@ -93,7 +133,7 @@ export const getFilteredWorkers = asyncHandler(async (req, res) => {
     throw new BadRequestError("Invalid radiusKm", "INVALID_RADIUS");
   }
 
-  const match = { role: "worker" };
+  const match = { role: "worker", currentRole: "worker" };
 
   let sortStage;
   let cursorMatch = null;
@@ -268,6 +308,7 @@ export const searchWorkersByName = asyncHandler(async (req, res) => {
 
   const match = {
     role: "worker",
+    // currentRole: "worker",
     fullName: { $regex: regex },
   };
 
@@ -413,7 +454,11 @@ export const searchFilteredWorkers = asyncHandler(async (req, res) => {
         distanceField: "distanceMeters",
         maxDistance: Number(radiusKm) * 1000,
         spherical: true,
-        query: { role: "worker" },
+        query: {
+          role: "worker",
+          _id: { $ne: req.user._id },
+          // currentRole: "worker",
+        },
       },
     },
     {
@@ -473,46 +518,46 @@ export const searchFilteredWorkers = asyncHandler(async (req, res) => {
         $match:
           order === "asc"
             ? {
-                $or: [
-                  { distanceMeters: { $gt: afterValue } },
-                  {
-                    distanceMeters: afterValue,
-                    _id: { $gt: afterObjectId },
-                  },
-                ],
-              }
+              $or: [
+                { distanceMeters: { $gt: afterValue } },
+                {
+                  distanceMeters: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            }
             : {
-                $or: [
-                  { distanceMeters: { $lt: afterValue } },
-                  {
-                    distanceMeters: afterValue,
-                    _id: { $gt: afterObjectId },
-                  },
-                ],
-              },
+              $or: [
+                { distanceMeters: { $lt: afterValue } },
+                {
+                  distanceMeters: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            },
       });
     } else {
       pipeline.push({
         $match:
           order === "asc"
             ? {
-                $or: [
-                  { ratingValue: { $gt: afterValue } },
-                  {
-                    ratingValue: afterValue,
-                    _id: { $gt: afterObjectId },
-                  },
-                ],
-              }
+              $or: [
+                { ratingValue: { $gt: afterValue } },
+                {
+                  ratingValue: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            }
             : {
-                $or: [
-                  { ratingValue: { $lt: afterValue } },
-                  {
-                    ratingValue: afterValue,
-                    _id: { $gt: afterObjectId },
-                  },
-                ],
-              },
+              $or: [
+                { ratingValue: { $lt: afterValue } },
+                {
+                  ratingValue: afterValue,
+                  _id: { $gt: afterObjectId },
+                },
+              ],
+            },
       });
     }
   }

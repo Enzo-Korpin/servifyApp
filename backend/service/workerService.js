@@ -2,7 +2,7 @@ import serviceRequest from "../models/serviceRequest.js";
 import WorkerProfile from "../models/workerProfile.js";
 import User from "../models/user.js";
 import mongoose from "mongoose";
-
+import cloudinary from "../lib/cloudinary.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import {
   BadRequestError,
@@ -28,6 +28,31 @@ export const getWorkerProfile = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, data: workerProfile, error: null });
 });
 
+const uploadProfileImageIfNeeded = async (image) => {
+  if (!image || typeof image !== "string") return image;
+
+  const trimmedImage = image.trim();
+
+  if (!trimmedImage.startsWith("data:image")) {
+    return trimmedImage;
+  }
+
+  const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+  const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3);
+
+  if (trimmedImage.length > MAX_BASE64_LENGTH) {
+    throw new PayloadTooLargeError("Image too large");
+  }
+
+  const uploadResponse = await cloudinary.uploader.upload(trimmedImage, {
+    folder: "avatar",
+    resource_type: "image",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+  });
+
+  return uploadResponse.secure_url;
+};
+
 export const updateWorkerProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
@@ -38,7 +63,7 @@ export const updateWorkerProfile = asyncHandler(async (req, res) => {
   const { fullName, image, bio, yearsOfExperience, skills } = req.body;
 
   const safeFullName = typeof fullName === "string" ? fullName.trim() : "";
-  const safeImage = typeof image === "string" ? image.trim() : "";
+  const safeImage = await uploadProfileImageIfNeeded(image);
   const safeBio = typeof bio === "string" ? bio.trim() : "";
 
   if (!safeFullName) {

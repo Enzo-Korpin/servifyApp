@@ -9,6 +9,7 @@ class WorkerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workerId = (worker["_id"] ?? "").toString();
+    final image = (worker["image"] ?? "").toString().trim();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -25,10 +26,13 @@ class WorkerCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 26,
-            backgroundColor: Color(0xFFE9EEF5),
-            child: Icon(Icons.person, color: Colors.black45),
+            backgroundColor: const Color(0xFFE9EEF5),
+            backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
+            child: image.isEmpty
+                ? const Icon(Icons.person, color: Colors.black45)
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(

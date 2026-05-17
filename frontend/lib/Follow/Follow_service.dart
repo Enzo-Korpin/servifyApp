@@ -117,7 +117,7 @@ class FollowService {
     final normalized = skills.map((e) => e.toLowerCase().trim()).toList();
 
     if (normalized.contains('plumbing')) return 'Plumber';
-    if (normalized.contains('electricity') || normalized.contains('electrical')) {
+    if (normalized.contains('Electrical') || normalized.contains('electrical')) {
       return 'Electrician';
     }
     if (normalized.contains('painting')) return 'Painter';

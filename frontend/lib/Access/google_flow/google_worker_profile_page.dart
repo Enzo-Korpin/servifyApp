@@ -24,7 +24,7 @@ class _GoogleWorkerProfilePageState extends State<GoogleWorkerProfilePage> {
 
   final List<String> skills = [
     "Plumbing",
-    "Electricity",
+    "Electrical",
     "Painting",
     "Cleaning",
     "Carpentry",

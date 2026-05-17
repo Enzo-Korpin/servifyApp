@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:image_picker/image_picker.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   const WorkerProfileScreen({super.key});
@@ -26,17 +30,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   late TextEditingController _bioController;
   late TextEditingController _yearsController;
 
+  final ImagePicker _imagePicker = ImagePicker();
+  File? _pickedImageFile;
+
   final List<String> _availableSkills = [
     "Plumbing",
     "Electrical",
-    "Painting",
     "Cleaning",
-    "Carpentry",
-    "AC Repair",
-    "Appliance Repair",
-    "Tiling",
-    "Gypsum",
-    "Aluminum",
+    "Painting",
   ];
 
   // ── Entrance animation ──
@@ -160,6 +161,27 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       }
       _isEditing = !_isEditing;
     });
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? file = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (file == null) return;
+
+      setState(() {
+        _pickedImageFile = File(file.path);
+        _image = file.path;
+      });
+
+      if (!mounted) return;
+      _showSnack("Image selected successfully");
+    } catch (e) {
+      _showSnack("Failed to pick image: ${e.toString()}");
+    }
   }
 
   void _removeSkill(String skill) {
@@ -312,74 +334,98 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Future<void> _saveProfile() async {
-    final fullName = _fullNameController.text.trim();
-    final bio = _bioController.text.trim();
-    final years = int.tryParse(_yearsController.text.trim());
-    final cleanedSkills =
-        _skills.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+Future<void> _saveProfile() async {
+  final fullName = _fullNameController.text.trim();
+  final bio = _bioController.text.trim();
+  final years = int.tryParse(_yearsController.text.trim());
 
-    if (fullName.length < 2) {
-      _showSnack("Full name must be at least 2 characters");
-      return;
+  final cleanedSkills = _skills
+      .map((e) => e.trim().toLowerCase())
+      .where((e) => e.isNotEmpty)
+      .toList();
+
+  if (fullName.length < 2) {
+    _showSnack("Full name must be at least 2 characters");
+    return;
+  }
+
+  if (years == null || years < 0 || years > 60) {
+    _showSnack("Years of experience must be between 0 and 60");
+    return;
+  }
+
+  if (cleanedSkills.isEmpty) {
+    _showSnack("Add at least one skill");
+    return;
+  }
+
+  setState(() => _isSaving = true);
+
+  try {
+    String? base64Image;
+
+    if (_pickedImageFile != null) {
+      final bytes = await _pickedImageFile!.readAsBytes();
+
+      base64Image =
+          "data:image/jpeg;base64,${base64Encode(bytes)}";
     }
-    if (years == null || years < 0 || years > 60) {
-      _showSnack("Years of experience must be between 0 and 60");
-      return;
-    }
-    if (cleanedSkills.isEmpty) {
-      _showSnack("Add at least one skill");
-      return;
-    }
 
-    setState(() => _isSaving = true);
+    final response = await DioClient.dio.put(
+      "/api/worker/profile",
+      data: {
+        "fullName": fullName,
+        "image": base64Image ?? _image,
+        "bio": bio,
+        "yearsOfExperience": years,
+        "skills": cleanedSkills,
+      },
+    );
 
-    try {
-      final response = await DioClient.dio.put(
-        "/api/worker/profile",
-        data: {
-          "fullName": fullName,
-          "image": _image,
-          "bio": bio,
-          "yearsOfExperience": years,
-          "skills": cleanedSkills,
-        },
-      );
+    final data = response.data["data"] as Map<String, dynamic>? ?? {};
+    final userData = data["_id"] as Map<String, dynamic>? ?? {};
 
-      final data = response.data["data"] as Map<String, dynamic>? ?? {};
-      final userData = data["_id"] as Map<String, dynamic>? ?? {};
+    setState(() {
+      _fullName = userData["fullName"]?.toString() ?? fullName;
+      _image = userData["image"]?.toString() ?? _image;
+      _bio = data["bio"]?.toString() ?? bio;
 
-      setState(() {
-        _fullName = userData["fullName"]?.toString() ?? fullName;
-        _image = userData["image"]?.toString() ?? _image;
-        _bio = data["bio"]?.toString() ?? bio;
-        _yearsOfExperience = (data["yearsOfExperience"] as num?)?.toInt() ?? years;
-        _skills = ((data["skills"] as List?) ?? [])
-            .map((e) => e.toString().trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
+      _yearsOfExperience =
+          (data["yearsOfExperience"] as num?)?.toInt() ?? years;
 
-        _fullNameController.text = _fullName;
-        _bioController.text = _bio;
-        _yearsController.text = _yearsOfExperience.toString();
-        _isEditing = false;
-      });
+      _skills = ((data["skills"] as List?) ?? [])
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
 
-      if (!mounted) return;
-      _showSnack("Worker profile updated successfully");
-      Navigator.pop(context, true);
-    } on DioException catch (e) {
-      _showSnack(
-        e.response?.data?["error"]?["message"]?.toString() ??
-            e.response?.data?["message"]?.toString() ??
-            "Update failed",
-      );
-    } catch (_) {
-      _showSnack("Update failed");
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      _fullNameController.text = _fullName;
+      _bioController.text = _bio;
+      _yearsController.text = _yearsOfExperience.toString();
+
+      _pickedImageFile = null;
+
+      _isEditing = false;
+    });
+
+    if (!mounted) return;
+
+    _showSnack("Worker profile updated successfully");
+
+    Navigator.pop(context, true);
+  } on DioException catch (e) {
+    _showSnack(
+      e.response?.data?["error"]?["message"]?.toString() ??
+          e.response?.data?["message"]?.toString() ??
+          "Update failed",
+    );
+  } catch (_) {
+    _showSnack("Update failed");
+  } finally {
+    if (mounted) {
+      setState(() => _isSaving = false);
     }
   }
+}
 
   void _showSnack(String msg) {
     if (!mounted) return;
@@ -394,51 +440,59 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
+
+
   Widget _buildAvatar() {
-    return Stack(
-      children: [
-        Container(
-          width: 86,
-          height: 86,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF63B3FF).withOpacity(0.35),
-              width: 3,
-            ),
-          ),
-          child: CircleAvatar(
-            radius: 40,
-            backgroundColor: const Color(0xFF1A3A6E),
-            backgroundImage: _image.isNotEmpty ? NetworkImage(_image) : null,
-            child: _image.isEmpty
-                ? const Icon(
-                    Icons.person_outline_rounded,
-                    size: 38,
-                    color: Color(0xFF63B3FF),
-                  )
-                : null,
-          ),
-        ),
-        Positioned(
-          bottom: 2,
-          right: 2,
-          child: Container(
-            width: 24,
-            height: 24,
+    return GestureDetector(
+      onTap: _isEditing ? _pickFromGallery : null,
+      child: Stack(
+        children: [
+          Container(
+            width: 86,
+            height: 86,
             decoration: BoxDecoration(
-              color: _navyMid,
               shape: BoxShape.circle,
-              border: Border.all(color: _navyDark, width: 2),
+              border: Border.all(
+                color: const Color(0xFF63B3FF).withOpacity(0.35),
+                width: 3,
+              ),
             ),
-            child: const Icon(
-              Icons.edit_rounded,
-              size: 11,
-              color: Colors.white,
+            child: CircleAvatar(
+              radius: 40,
+              backgroundColor: const Color(0xFF1A3A6E),
+              backgroundImage: _pickedImageFile != null
+                  ? FileImage(_pickedImageFile!)
+                  : (_image.isNotEmpty ? NetworkImage(_image) : null),
+              child: (_pickedImageFile == null && _image.isEmpty)
+                  ? const Icon(
+                      Icons.person_outline_rounded,
+                      size: 38,
+                      color: Color(0xFF63B3FF),
+                    )
+                  : null,
             ),
           ),
-        ),
-      ],
+          if (_isEditing)
+            Positioned(
+              bottom: 2,
+              right: 2,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _navyMid,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _navyDark, width: 2),
+                ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  size: 11,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

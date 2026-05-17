@@ -31,7 +31,7 @@ class _StartUserState extends State<StartUser> {
 
   final List<String> skills = [
     "Plumbing",
-    "Electricity",
+    "Electrical",
     "Painting",
     "Cleaning",
     "Carpentry",

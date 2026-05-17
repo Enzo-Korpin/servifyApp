@@ -77,7 +77,7 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
     Category(
       key: "Electrical",
       value: "assets/electrsian.png",
-      apiSkill: "electricity",
+      apiSkill: "electrical",
       workerType: "Electrician",
     ),
     Category(
@@ -561,7 +561,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
   String _resolveMainJob(List<String> skills) {
     final n = skills.map((e) => e.toLowerCase().trim()).toList();
     if (n.contains('plumbing')) return 'Plumber';
-    if (n.contains('electricity') || n.contains('electrical')) {
+    if (n.contains('Electrical') || n.contains('electrical')) {
       return 'Electrician';
     }
     if (n.contains('painting')) return 'Painter';
