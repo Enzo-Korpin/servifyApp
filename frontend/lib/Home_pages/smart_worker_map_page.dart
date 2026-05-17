@@ -313,11 +313,20 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
       });
 
       if (_useMap) {
-        final z = _mapController.camera.zoom == 0
-            ? 13.0
-            : _mapController.camera.zoom;
-        _mapController.move(LatLng(lat, lng), z);
-      }
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+
+    try {
+      final z = _mapController.camera.zoom == 0
+          ? 13.0
+          : _mapController.camera.zoom;
+
+      _mapController.move(LatLng(lat, lng), z);
+    } catch (_) {
+      // Map is not ready yet. Safe to ignore.
+    }
+  });
+}
     } on DioException catch (e) {
       _showMessage(
         e.response?.data?["message"]?.toString() ??
