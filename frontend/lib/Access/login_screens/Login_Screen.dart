@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:frontend/Access/google_flow/google_auth_service.dart';
 import 'package:frontend/Access/google_flow/google_worker_profile_page.dart';
@@ -7,6 +8,7 @@ import 'package:frontend/Home_pages/home_worker.dart';
 import 'package:frontend/Home_pages/smart_worker_map_page.dart';
 import 'package:frontend/core/network/dio_client.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/core/network/socket_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -73,59 +75,105 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _login() async {
-    final email = emailCtrl.text.trim();
-    final password = passwordCtrl.text.trim();
+Future<void> _login() async {
+  final email = emailCtrl.text.trim();
+  final password = passwordCtrl.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _showMessage("Please enter email and password");
-      return;
-    }
+  if (email.isEmpty || password.isEmpty) {
+    _showMessage("Please enter email and password");
+    return;
+  }
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      final response = await DioClient.dio.post(
-        "/api/auth/login",
-        data: {
-          "email": email,
-          "password": password,
-        },
-      );
+  try {
+    print("DEBUG Login: Step 1 - Disconnect old socket");
+    SocketClient.instance.disconnect();
 
-      final data = response.data as Map<String, dynamic>?;
+    print("DEBUG Login: Step 2 - NUCLEAR cookie reset");
+    await DioClient.resetCookieJarCompletely();
 
-      if (response.statusCode == 200 && data != null && data["success"] == true) {
-        final userData = data["data"] as Map<String, dynamic>?;
-        final currentRole = userData?["currentRole"] ?? userData?["role"];
+    print("DEBUG Login: Step 3 - POST /api/auth/login");
+    final response = await DioClient.dio.post(
+      "/api/auth/login",
+      data: {
+        "email": email,
+        "password": password,
+      },
+    );
 
-        _showMessage("Login successful");
+    final data = response.data as Map<String, dynamic>?;
 
-        _goToHomeByRole(
-          currentRole: currentRole?.toString(),
-          nextAction: null,
+    if (response.statusCode == 200 &&
+        data != null &&
+        data["success"] == true) {
+      bool tokenReady = false;
+
+      for (int i = 0; i < 10; i++) {
+        final cookies = await DioClient.cookieJar.loadForRequest(
+          Uri.parse(DioClient.baseUrl),
         );
-      } else {
-        final message =
-            data?["message"]?.toString() ??
-            data?["error"]?.toString() ??
-            "Login failed";
 
-        _showMessage(message);
+        Cookie? tokenCookie;
+
+        for (final cookie in cookies) {
+          if (cookie.name == 'token' && cookie.value.trim().isNotEmpty) {
+            tokenCookie = cookie;
+            break;
+          }
+        }
+
+        if (tokenCookie != null) {
+          print("DEBUG Login: Token cookie is ready");
+          tokenReady = true;
+          break;
+        }
+
+        print("DEBUG Login: Waiting for token cookie...");
+        await Future.delayed(const Duration(milliseconds: 200));
       }
-    } on DioException catch (e) {
+
+      if (!tokenReady) {
+        throw Exception("Token cookie was not persisted after login");
+      }
+
+      print("DEBUG Login: Step 5 - Reconnect socket fresh");
+      await SocketClient.instance.reconnectFresh();
+
+      final userData = data["data"] as Map<String, dynamic>?;
+      final currentRole = userData?["currentRole"] ?? userData?["role"];
+
+      print("DEBUG Login: Step 6 - Navigate to home by role: $currentRole");
+
+      _showMessage("Login successful");
+
+      _goToHomeByRole(
+        currentRole: currentRole?.toString(),
+        nextAction: null,
+      );
+    } else {
       final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
+          data?["message"]?.toString() ??
+          data?["error"]?.toString() ??
           "Login failed";
 
       _showMessage(message);
-    } catch (e) {
-      _showMessage("Login failed: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    }
+  } on DioException catch (e) {
+    final message =
+        e.response?.data?["message"]?.toString() ??
+        e.response?.data?["error"]?.toString() ??
+        "Login failed";
+
+    _showMessage(message);
+  } catch (e) {
+    _showMessage("Login failed: $e");
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   Future<void> _googleLogin() async {
     setState(() => _isGoogleLoading = true);

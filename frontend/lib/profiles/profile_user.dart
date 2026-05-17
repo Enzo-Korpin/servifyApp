@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/network/socket_client.dart';
 import 'package:frontend/services/account_switch_service.dart';
 import '../Access/login_screens/Login_Screen.dart';
+import '../Access/login_screens/select_type.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -339,51 +341,51 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     }
   }
 
-  Future<void> logoutUser() async {
-    if (isLoggingOut) return;
+Future<void> logoutUser() async {
+  if (isLoggingOut) return;
 
-    setState(() {
-      isLoggingOut = true;
-    });
+  setState(() {
+    isLoggingOut = true;
+  });
 
-    try {
-      await DioClient.dio.post("/api/auth/logout");
+  try {
+    print("DEBUG Logout: Step 1 - Disconnecting socket");
+    SocketClient.instance.disconnect();
+    await Future.delayed(const Duration(milliseconds: 200)); // Let disconnect complete
 
-      if (!mounted) return;
+    print("DEBUG Logout: Step 2 - POST /api/auth/logout");
+    await DioClient.dio.post("/api/auth/logout");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Logged out successfully")),
-      );
+    print("DEBUG Logout: Step 3 - NUCLEAR cookie reset (delete persistent storage)");
+    await DioClient.resetCookieJarCompletely();
+    print("DEBUG Logout: Cookie storage completely reset");
 
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
-    } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Logout failed";
+    if (!mounted) return;
 
-      if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Logged out successfully")),
+    );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
+    print("DEBUG Logout: Step 4 - Navigating to SelectType");
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => SelectType()),
+      (route) => false,
+    );
+  } catch (e) {
+    print("DEBUG Logout: ERROR - $e");
+    if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Logout failed: $e")),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoggingOut = false;
-        });
-      }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Logout failed: $e")),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        isLoggingOut = false;
+      });
     }
   }
+}
 
   Future<void> confirmLogout() async {
     if (isLoggingOut) return;

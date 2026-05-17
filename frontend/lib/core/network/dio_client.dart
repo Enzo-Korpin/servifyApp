@@ -1,16 +1,21 @@
-import 'package:dio/dio.dart';
+import 'dart:io';
+
 import 'package:cookie_jar/cookie_jar.dart';
+import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:path_provider/path_provider.dart';
-// http://10.0.2.2:5000
-// http://192.168.100.9:5000
+
 class DioClient {
   static late Dio dio;
+  static late PersistCookieJar cookieJar;
+  static late String _cookieStorePath;
+
+  static const String baseUrl = 'http://192.168.100.9:5000';
 
   static Future<void> init() async {
     dio = Dio(
       BaseOptions(
-        baseUrl: 'http://10.0.2.2:5000',
+        baseUrl: baseUrl,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -18,10 +23,17 @@ class DioClient {
     );
 
     final dir = await getApplicationDocumentsDirectory();
+    _cookieStorePath = "${dir.path}/.cookies/";
 
-    final cookieJar = PersistCookieJar(
-      storage: FileStorage("${dir.path}/.cookies/"),
+    cookieJar = PersistCookieJar(
+      storage: FileStorage(_cookieStorePath),
     );
+
+    _attachInterceptors();
+  }
+
+  static void _attachInterceptors() {
+    dio.interceptors.clear();
 
     dio.interceptors.add(CookieManager(cookieJar));
 
@@ -41,5 +53,28 @@ class DioClient {
         },
       ),
     );
+  }
+
+  static Future<void> resetCookieJarCompletely() async {
+    print("DEBUG: NUCLEAR COOKIE RESET - Deleting persistent storage...");
+
+    final dir = Directory(_cookieStorePath);
+
+    if (await dir.exists()) {
+      print("DEBUG: Cookie storage dir exists, deleting...");
+      await dir.delete(recursive: true);
+      print("DEBUG: Cookie storage deleted successfully");
+    }
+
+    cookieJar = PersistCookieJar(
+      storage: FileStorage(_cookieStorePath),
+    );
+
+    _attachInterceptors();
+
+    print("DEBUG: Fresh CookieJar created and attached to Dio");
+
+    final cookies = await cookieJar.loadForRequest(Uri.parse(baseUrl));
+    print("DEBUG: After reset, cookie count: ${cookies.length} (should be 0)");
   }
 }

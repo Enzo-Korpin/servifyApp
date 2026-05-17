@@ -8,6 +8,8 @@ import '../requests/Widgets/worker_order_card.dart';
 import '../Access/login_screens/Login_Screen.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/worker/worker_profile_screen.dart';
+import 'package:frontend/chat/chat_page.dart';
+import 'package:frontend/ai/ai_chat_page.dart';
 
 class _StatusState {
   static const Object _unset = Object();
@@ -82,6 +84,7 @@ class _HomeWorkerState extends State<HomeWorker>
   bool _isSwitchingAccount = false;
   String? _globalError;
 
+  int _selectedIndex = 0;
   String _selectedStatus = "pending";
 
   Map<String, int> _stats = {
@@ -992,51 +995,153 @@ class _HomeWorkerState extends State<HomeWorker>
       );
     }
 
+    return Scaffold(
+      backgroundColor: _bgLight,
+      body: _buildCurrentPage(),
+      bottomNavigationBar: _buildBottomNavigation(),
+    );
+  }
+
+  Widget _buildCurrentPage() {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildRequestsPage();
+      case 1:
+        return const ChatPage();
+      case 2:
+        return const AiChatPage();
+      case 3:
+        return _buildProfilePage();
+      default:
+        return _buildRequestsPage();
+    }
+  }
+
+  Widget _buildRequestsPage() {
     if (_globalError != null) {
-      return Scaffold(
-        backgroundColor: _bgLight,
-        body: _emptyState(
-          icon: Icons.wifi_off_rounded,
-          iconColor: const Color(0xFFE24B4A),
-          title: "Failed to load",
-          subtitle: _globalError,
-          action: _loadInitialData,
-          actionLabel: "Retry",
-        ),
+      return _emptyState(
+        icon: Icons.wifi_off_rounded,
+        iconColor: const Color(0xFFE24B4A),
+        title: "Failed to load",
+        subtitle: _globalError,
+        action: _loadInitialData,
+        actionLabel: "Retry",
       );
     }
 
-    return Scaffold(
-      backgroundColor: _bgLight,
-      body: RefreshIndicator(
-        color: _navyMid,
-        backgroundColor: Colors.white,
-        onRefresh: _refreshCurrentTab,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(child: _buildNavyHeader()),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatCards(),
-                    const SizedBox(height: 20),
-                    _buildRequestsSection(),
-                  ],
+    return RefreshIndicator(
+      color: _navyMid,
+      backgroundColor: Colors.white,
+      onRefresh: _refreshCurrentTab,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(child: _buildNavyHeader()),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStatCards(),
+                  const SizedBox(height: 20),
+                  _buildRequestsSection(),
+                ],
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: _buildBodyList(),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfilePage() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _buildNavyHeader(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              onPressed: () async {
+                final updated = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => const WorkerProfileScreen(),
+                  ),
+                );
+                if (updated == true && mounted) {
+                  await _loadInitialData();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _navyMid,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                "Edit Profile",
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: _buildBodyList(),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 30)),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigation() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+      ),
+      child: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _selectedIndex,
+        selectedItemColor: _navyMid,
+        unselectedItemColor: const Color(0xFF94A3B8),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        selectedLabelStyle: GoogleFonts.inter(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
         ),
+        unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.description_outlined),
+            activeIcon: Icon(Icons.description_rounded),
+            label: "Requests",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat_bubble_outline_rounded),
+            activeIcon: Icon(Icons.chat_bubble_rounded),
+            label: "Chat",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.smart_toy_outlined),
+            activeIcon: Icon(Icons.smart_toy_rounded),
+            label: "AI",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline_rounded),
+            activeIcon: Icon(Icons.person_rounded),
+            label: "Profile",
+          ),
+        ],
       ),
     );
   }

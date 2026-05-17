@@ -173,7 +173,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new ForbiddenError("Email not verified", "EMAIL_NOT_VERIFIED");
   }
 
-  generateTokenAndSetCookie(res, user._id);
+  console.log("DEBUG loginUser: Generating token for user:", user._id, user.email);
+  const token = generateTokenAndSetCookie(res, user._id);
+  console.log("DEBUG loginUser: Set-Cookie token:", token.substring(0, 50) + "...");
+
   const safeUser = user.toObject();
   return res.status(200).json({
     success: true,

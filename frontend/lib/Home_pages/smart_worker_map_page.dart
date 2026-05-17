@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:frontend/Follow/Follow_page.dart';
 import 'package:frontend/ai/ai_chat_page.dart';
+import 'package:frontend/chat/chat_page.dart';
 import 'package:frontend/notifications/notifications_screen.dart';
 import 'package:frontend/services/notification_service.dart';
 
@@ -1001,7 +1002,7 @@ class _SmartWorkerMapPageState extends State<SmartWorkerMapPage>
       case 1:
         return const RequestsPage();
       case 2:
-        return const Center(child: Text("Chat Screen"));
+        return const ChatPage();
       case 3:
         return const AiChatPage();
       case 4:
