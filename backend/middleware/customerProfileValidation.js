@@ -1,7 +1,7 @@
-import { CustomerProfileValidation } from "../validators/CustomerProfileValidator.js";
+import { customerProfileValidation } from "../validators/customerProfileValidator.js";
 
-export const CustomerProfileValidation = (req, res, next) => {
-  const { error, value } = CustomerProfileValidation(req.body ?? {}, {
+export const customerProfileValidation = (req, res, next) => {
+  const { error, value } = customerProfileValidation(req.body ?? {}, {
     abortEarly: false,
     stripUnknown: true,
     convert: true,

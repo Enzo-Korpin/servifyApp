@@ -11,14 +11,14 @@ import {
   getLocation,
 } from "../service/customerService.js";
 import { filterValidation } from "../middleware/filterValidation.js";
-import { CustomerProfileValidation } from "../middleware/CustomerProfileValidation.js";
+import { customerProfileValidation } from "../middleware/customerProfileValidation.js";
 import { searchTextValidation } from "../middleware/searchTextValidation.js";
 import { searchFilteredWorkersValidation } from "../middleware/searchFilteredWorkersValidation.js";
 
 const router = express.Router();
 
 router.get("/profile", protectRoute, getCustomerProfile);
-router.put("/profile", protectRoute, CustomerProfileValidation, updateCustomerProfile);
+router.put("/profile", protectRoute, customerProfileValidation, updateCustomerProfile);
 
 router.get(
   "/filtered-workers",
