@@ -29,3 +29,7 @@ coverage/
 
 # Node (future-proof)
 node_modules/
+
+android/key.properties
+*.jks
+*.keystore
