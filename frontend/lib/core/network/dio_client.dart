@@ -9,7 +9,7 @@ class DioClient {
   static late Dio dio;
   static late PersistCookieJar cookieJar;
   static late String _cookieStorePath;
-
+// 10.10.10.2
   static const String baseUrl = 'http://192.168.100.9:5000';
 
   static Future<void> init() async {
