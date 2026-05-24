@@ -10,7 +10,7 @@ import {
   getAllWorker,
   getWorkerById,
 } from "../service/workerService.js";
-import { workerProfileValidation } from "../middleware/WorkerProfileValidation.js";
+import { workerProfileValidation } from "../middleware/workerProfileValidation.js";
 import { requireCompletedOnboarding } from "../middleware/requireCompletedOnboarding.js";
 
 const router = express.Router();
