@@ -2,8 +2,12 @@ import Joi from "joi";
 import { BadRequestError } from "../../errors/httpErrors.js";
 
 /**
- * Validates req.query against a Joi schema. Reassigns req.query to the coerced/cleaned values.
+ * Validates req.query against a Joi schema and exposes the cleaned values.
  * Uses { convert: true, stripUnknown: true } so query strings like "page=2" become numbers.
+ *
+ * Express 5 changed `req.query` to a getter-only property — we can't reassign it.
+ * We redefine it as a writable property so existing controllers can keep reading
+ * `req.query` without any code changes.
  */
 export const validateQuery = (schema) => (req, _res, next) => {
   const { value, error } = schema.validate(req.query, {
@@ -20,7 +24,12 @@ export const validateQuery = (schema) => (req, _res, next) => {
     return next(new BadRequestError("Invalid query parameters", "INVALID_QUERY", details));
   }
 
-  req.query = value;
+  Object.defineProperty(req, "query", {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
   return next();
 };
 
