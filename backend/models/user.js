@@ -23,28 +23,49 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["customer", "worker"],
+      enum: ["customer", "worker", "admin"],
       required: true,
     },
 
     currentRole: {
       type: String,
-      enum: ["customer", "worker"],
+      enum: ["customer", "worker", "admin"],
       default: function () {
         return this.role;
       },
+    },
+
+    // Admin can block any user; blocked users cannot log in (enforced in loginUser/protectRoute layers as needed).
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+
+    blockedReason: {
+      type: String,
+      default: null,
     },
 
     location: {
       type: {
         type: String,
         enum: ["Point"],
-        required: true,
+        // Admins don't need a geo location; only required for customer/worker.
+        required: function () {
+          return this.role !== "admin";
+        },
         default: "Point",
       },
       coordinates: {
         type: [Number], // [lng, lat]
-        required: true,
+        required: function () {
+          return this.role !== "admin";
+        },
       },
     },
 
@@ -110,6 +131,13 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ location: "2dsphere" });
 userSchema.index({ role: 1, fullName: 1, _id: 1 });
+
+// Admin dashboard indexes — server-side pagination/filter/sort speed.
+userSchema.index({ createdAt: -1 });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ isVerified: 1, createdAt: -1 });
+userSchema.index({ isBlocked: 1 });
+userSchema.index({ fullName: "text", email: "text" });
 
 const User = mongoose.model("User", userSchema);
 

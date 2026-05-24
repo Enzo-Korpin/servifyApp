@@ -173,6 +173,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new ForbiddenError("Email not verified", "EMAIL_NOT_VERIFIED");
   }
 
+  if (user.isBlocked) {
+    throw new ForbiddenError("Account is blocked", "ACCOUNT_BLOCKED");
+  }
+
   const token = generateTokenAndSetCookie(res, user._id);
 
   const safeUser = user.toObject();

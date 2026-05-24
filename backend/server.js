@@ -61,6 +61,7 @@ import feedbackRoutes from "./routes/feedbackRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import aiRoutes from "./ai/ai.routes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import adminRoutes from "./admin/adminRoutes.js";
 
 import { connectDB } from "./db/connectDB.js";
 import { initSocket } from "./lib/socket.js";
@@ -92,6 +93,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use(RouteNotFound);
 app.use(errorHandler);
