@@ -92,7 +92,9 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.get("/health", (req, res) => {
+  res.status(200).json({ success: true, message: "OK" });
+});
 app.use(RouteNotFound);
 app.use(errorHandler);
 
