@@ -1,189 +1,3 @@
-// import User from "../models/user.js";
-// import Chat from "../models/Chat.js";
-// import Message from "../models/message.js";
-// import cloudinary from "../lib/cloudinary.js";
-// import mongoose from "mongoose";
-// import { asyncHandler } from "../middleware/asyncHandler.js";
-// import {
-//   BadRequestError,
-//   UnauthorizedError,
-//   ForbiddenError,
-//   NotFoundError,
-//   ConflictError,
-//   PayloadTooLargeError,
-// } from "../errors/httpErrors.js";
-
-// // import { getReceiverSocketId, io } from "../lib/socket.js";
-
-// export const getUsersForSidebar = asyncHandler(async (req, res) => {
-//   const myId = req.user._id;
-
-//   const chats = await Chat.find({
-//     $or: [{ customerId: myId }, { workerId: myId }],
-//   })
-//     .select("customerId workerId updatedAt")
-//     .sort({ updatedAt: -1 })
-//     .lean();
-
-//   if (chats.length === 0) {
-//     return res.status(200).json({ success: true, data: [], error: null });
-//   }
-
-//   const otherUserIds = [];
-//   for (const c of chats) {
-//     const otherId =
-//       String(c.customerId) === String(myId) ? c.workerId : c.customerId;
-
-//     if (otherId) otherUserIds.push(otherId);
-//   }
-
-//   const users = await User.find({ _id: { $in: otherUserIds } })
-//     .select("_id fullName image role currentRole")
-//     .lean();
-
-//   const chatOrder = new Map(
-//     chats
-//       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-//       .map((c, idx) => {
-//         const otherId =
-//           String(c.customerId) === String(myId)
-//             ? String(c.workerId)
-//             : String(c.customerId);
-//         return [otherId, idx];
-//       }),
-//   );
-
-//   users.sort(
-//     (a, b) =>
-//       (chatOrder.get(String(a._id)) ?? 999999) -
-//       (chatOrder.get(String(b._id)) ?? 999999),
-//   );
-
-//   return res.status(200).json({ success: true, data: users, error: null });
-// });
-
-// export const getMessages = asyncHandler(async (req, res) => {
-//   const { id: userToChatId } = req.params;
-//   const myId = req.user._id;
-
-//   if (!mongoose.Types.ObjectId.isValid(userToChatId)) {
-//     throw new BadRequestError("Invalid user ID", "INVALID_USER_ID");
-//   }
-
-//   const limit = Math.min(parseInt(req.query.limit || "10", 10), 10);
-//   const before = req.query.before;
-
-//   const query = {
-//     $or: [
-//       { senderId: myId, receiverId: userToChatId },
-//       { senderId: userToChatId, receiverId: myId },
-//     ],
-//   };
-
-//   if (before) {
-//     const [beforeDateStr, beforeId] = String(before).split("|");
-//     const beforeDate = new Date(beforeDateStr);
-
-//     if (
-//       !beforeDateStr ||
-//       Number.isNaN(beforeDate.getTime()) ||
-//       !mongoose.Types.ObjectId.isValid(beforeId)
-//     ) {
-//       throw new BadRequestError(
-//         "Invalid 'before' cursor",
-//         "INVALID_BEFORE_CURSOR",
-//       );
-//     }
-
-//     query.$and = [
-//       {
-//         $or: [
-//           { createdAt: { $lt: beforeDate } },
-//           { createdAt: beforeDate, _id: { $lt: beforeId } },
-//         ],
-//       },
-//     ];
-//   }
-
-//   const docs = await Message.find(query)
-//     .sort({ createdAt: -1, _id: -1 })
-//     .limit(limit)
-//     .lean();
-
-//   const messages = docs.reverse();
-
-//   const nextCursor =
-//     messages.length > 0
-//       ? `${messages[0].createdAt.toISOString()}|${messages[0]._id}`
-//       : null;
-
-//   return res
-//     .status(200)
-//     .json({ success: true, data: { messages, nextCursor }, error: null });
-// });
-
-// export const sendMessage = asyncHandler(async (req, res) => {
-//   const { text, image } = req.body;
-//   const { id: receiverId } = req.params;
-//   const senderId = req.user._id;
-
-//   if (!mongoose.Types.ObjectId.isValid(receiverId)) {
-//     throw new BadRequestError("Invalid receiverId", "INVALID_RECEIVER_ID");
-//   }
-
-//   if (String(senderId) === String(receiverId)) {
-//     throw new BadRequestError("Cannot message yourself", "CANNOT_MESSAGE_SELF");
-//   }
-
-//   const existsUser = await User.exists({ _id: receiverId });
-//   if (!existsUser) {
-//     throw new NotFoundError("Receiver user not found", "RECEIVER_NOT_FOUND");
-//   }
-
-//   const chat = await Chat.findOne({
-//     $or: [
-//       { customerId: senderId, workerId: receiverId },
-//       { customerId: receiverId, workerId: senderId },
-//     ],
-//   }).select("_id");
-
-//   if (!chat) {
-//     throw new ForbiddenError(
-//       "No chat exists between these users",
-//       "NO_CHAT_FOR_USERS",
-//     );
-//   }
-
-//   let imageUrl;
-//   if (image) {
-//     const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
-//     const MAX_BASE64_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3);
-
-//     if (image.length > MAX_BASE64_LENGTH) {
-//       throw new PayloadTooLargeError("Image too large", "IMAGE_TOO_LARGE");
-//     }
-
-//     const uploadResponse = await cloudinary.uploader.upload(image, {
-//       folder: "chat",
-//       resource_type: "image",
-//       allowed_formats: ["jpg", "jpeg", "png", "webp"],
-//     });
-
-//     imageUrl = uploadResponse.secure_url;
-//   }
-
-//   const newMessage = await Message.create({
-//     chatId: chat._id,
-//     senderId,
-//     receiverId,
-//     text: text ?? null,
-//     imageURL: imageUrl ?? null,
-//   });
-
-//   await Chat.updateOne({ _id: chat._id }, { $set: { updatedAt: new Date() } });
-
-//   return res.status(201).json({ success: true, data: newMessage, error: null });
-// });
 import mongoose from "mongoose";
 
 import User from "../models/user.js";
@@ -292,51 +106,107 @@ export const createMessage = async ({ senderId, receiverId, text, image }) => {
   return newMessage.toObject();
 };
 
+/**
+ * GET /api/message/users
+ *
+ * Returns chat partners ordered by most-recent activity. Used by the sidebar
+ * in the Flutter messaging tab.
+ *
+ * Pagination:
+ *  - ?limit (default 30, hard-capped at 50) → page size
+ *  - ?before (cursor "<updatedAt>|<chatId>") → next page
+ *  - Response includes a top-level `nextCursor` (null when no more pages)
+ *
+ * Backward-compatibility: callers that don't pass cursor params get the most
+ * recent `limit` chats — exactly the same `data: [...]` shape as before, just
+ * size-bounded. Old Flutter builds that read response.data continue to work
+ * unchanged; new builds can opt in to scroll by reading `nextCursor`.
+ *
+ * Query plan:
+ *  - $or branches hit { customerId:1, updatedAt:-1 } and { workerId:1, updatedAt:-1 }
+ *    indexes (defined on the Chat model). MongoDB's index union picks both up.
+ *  - Cursor filter `(updatedAt < cur)` keeps the same index usable, so a user
+ *    with 5,000 chats still pages in O(limit) work per call instead of O(N).
+ */
 export const getUsersForSidebar = asyncHandler(async (req, res) => {
   const myId = req.user._id;
 
-  const chats = await Chat.find({
+  const limit = Math.min(parseInt(req.query.limit || "30", 10), 50);
+  const before = req.query.before;
+
+  const chatFilter = {
     $or: [{ customerId: myId }, { workerId: myId }],
-  })
+  };
+
+  if (before) {
+    const [beforeDateStr, beforeId] = String(before).split("|");
+    const beforeDate = new Date(beforeDateStr);
+
+    if (
+      !beforeDateStr ||
+      Number.isNaN(beforeDate.getTime()) ||
+      !mongoose.Types.ObjectId.isValid(beforeId)
+    ) {
+      throw new BadRequestError(
+        "Invalid 'before' cursor",
+        "INVALID_BEFORE_CURSOR",
+      );
+    }
+
+    // Compound keyset cursor: stable even when many chats share updatedAt.
+    chatFilter.$and = [
+      {
+        $or: [
+          { updatedAt: { $lt: beforeDate } },
+          { updatedAt: beforeDate, _id: { $lt: beforeId } },
+        ],
+      },
+    ];
+  }
+
+  const chats = await Chat.find(chatFilter)
     .select("customerId workerId updatedAt")
-    .sort({ updatedAt: -1 })
+    .sort({ updatedAt: -1, _id: -1 })
+    .limit(limit)
     .lean();
 
   if (chats.length === 0) {
-    return res.status(200).json({ success: true, data: [], error: null });
+    return res
+      .status(200)
+      .json({ success: true, data: [], nextCursor: null, error: null });
   }
 
-  const otherUserIds = [];
-
-  for (const chat of chats) {
-    const otherId = String(chat.customerId) === String(myId)
-      ? chat.workerId
-      : chat.customerId;
-
-    if (otherId) otherUserIds.push(otherId);
-  }
+  const otherUserIds = chats.map((chat) =>
+    String(chat.customerId) === String(myId) ? chat.workerId : chat.customerId,
+  );
 
   const users = await User.find({ _id: { $in: otherUserIds } })
     .select("_id fullName image role currentRole")
     .lean();
 
-  const chatOrder = new Map(
-    chats.map((chat, index) => {
-      const otherId = String(chat.customerId) === String(myId)
-        ? String(chat.workerId)
-        : String(chat.customerId);
+  // chats[] is already in the desired order — preserve it instead of sorting
+  // the user list separately. Filter Boolean handles the rare case where the
+  // other user has been deleted (User.find skips them but the chat row remains).
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
+  const orderedUsers = chats
+    .map((chat) => {
+      const otherId =
+        String(chat.customerId) === String(myId)
+          ? String(chat.workerId)
+          : String(chat.customerId);
+      return userMap.get(otherId);
+    })
+    .filter(Boolean);
 
-      return [otherId, index];
-    }),
-  );
+  // Only emit a cursor when we filled the page — fewer than `limit` means
+  // there's nothing left to fetch.
+  const last = chats[chats.length - 1];
+  const nextCursor =
+    chats.length === limit ? `${last.updatedAt.toISOString()}|${last._id}` : null;
 
-  users.sort(
-    (a, b) =>
-      (chatOrder.get(String(a._id)) ?? 999999) -
-      (chatOrder.get(String(b._id)) ?? 999999),
-  );
-
-  return res.status(200).json({ success: true, data: users, error: null });
+  return res
+    .status(200)
+    .json({ success: true, data: orderedUsers, nextCursor, error: null });
 });
 
 export const getMessages = asyncHandler(async (req, res) => {

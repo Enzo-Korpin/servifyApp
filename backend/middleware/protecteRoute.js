@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 import { asyncHandler } from "./asyncHandler.js";
-import { UnauthorizedError } from "../errors/httpErrors.js";
+import { ForbiddenError, UnauthorizedError } from "../errors/httpErrors.js";
 
 export const protectRoute = asyncHandler(async (req, res, next) => {
   let token = req.cookies?.token;
@@ -33,6 +33,10 @@ export const protectRoute = asyncHandler(async (req, res, next) => {
       "Unauthorized - User Not Found",
       "USER_NOT_FOUND",
     );
+  }
+
+  if (user.isBlocked) {
+    throw new ForbiddenError("Account is blocked", "ACCOUNT_BLOCKED");
   }
 
   req.user = user;
