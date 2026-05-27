@@ -10,6 +10,10 @@ import {
   NotFoundError,
 } from "../../errors/httpErrors.js";
 import { okResponse, paginatedResponse } from "../utils/paginate.js";
+import {
+  invalidateAdminStats,
+  invalidateWorkerPublic,
+} from "../../lib/cache.js";
 
 /**
  * Always-safe projection — never expose password hashes, reset codes, or FCM tokens.
@@ -100,6 +104,11 @@ export const blockUser = asyncHandler(async (req, res) => {
   target.blockedReason = isBlocked ? (reason || "").trim() || null : null;
   await target.save();
 
+  // Counts change → flush cached dashboard stats so the next admin GET is fresh.
+  // Also drop the worker's public cache so customers don't see a blocked
+  // worker's stale profile.
+  await Promise.all([invalidateAdminStats(), invalidateWorkerPublic(id)]);
+
   return okResponse(res, {
     _id: target._id,
     isBlocked: target.isBlocked,
@@ -146,6 +155,10 @@ export const deleteUser = asyncHandler(async (req, res) => {
   } finally {
     session.endSession();
   }
+
+  // Removed a user (and possibly their requests/feedback) → stats are now
+  // stale, and if they were a worker their public profile cache is too.
+  await Promise.all([invalidateAdminStats(), invalidateWorkerPublic(id)]);
 
   return okResponse(res, { _id: id, deleted: true });
 });

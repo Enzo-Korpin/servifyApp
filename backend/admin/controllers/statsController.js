@@ -4,6 +4,12 @@ import WorkerProfile from "../../models/workerProfile.js";
 import ServiceRequest from "../../models/serviceRequest.js";
 import Feedback from "../../models/feedback.js";
 import { okResponse } from "../utils/paginate.js";
+import { withCache, cacheKeys } from "../../lib/cache.js";
+
+// All admin stats endpoints are read-heavy and idempotent — cache them.
+// 60s TTL is short enough that mutations propagate naturally between manual
+// refreshes; mutation handlers (block/delete) also explicitly invalidate.
+const STATS_TTL_SEC = 60;
 
 const startOfThisMonth = () => {
   const d = new Date();
@@ -16,6 +22,13 @@ const startOfThisMonth = () => {
  * and `countDocuments` (with indexed filters) — no heavy aggregations on the hot path.
  */
 export const getStats = asyncHandler(async (_req, res) => {
+  const data = await withCache(cacheKeys.adminStats(), STATS_TTL_SEC, () =>
+    computeStats(),
+  );
+  return okResponse(res, data);
+});
+
+const computeStats = async () => {
   const monthStart = startOfThisMonth();
 
   const [
@@ -56,7 +69,7 @@ export const getStats = asyncHandler(async (_req, res) => {
 
   const averageRating = ratingAgg[0]?.avg ? Number(ratingAgg[0].avg.toFixed(2)) : 0;
 
-  return okResponse(res, {
+  return {
     users: {
       total: totalUsers,
       customers: totalCustomers,
@@ -78,8 +91,8 @@ export const getStats = asyncHandler(async (_req, res) => {
       total: feedbackCount,
       averageRating,
     },
-  });
-});
+  };
+};
 
 /**
  * GET /api/admin/stats/users-growth
@@ -89,6 +102,15 @@ export const getStats = asyncHandler(async (_req, res) => {
  */
 export const getUsersGrowth = asyncHandler(async (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 180);
+  const data = await withCache(
+    cacheKeys.adminStatsGrowth(days),
+    STATS_TTL_SEC,
+    () => computeUsersGrowth(days),
+  );
+  return okResponse(res, data);
+});
+
+const computeUsersGrowth = async (days) => {
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - (days - 1));
@@ -104,7 +126,6 @@ export const getUsersGrowth = asyncHandler(async (req, res) => {
     { $sort: { _id: 1 } },
   ]);
 
-  // Fill missing days with 0 so the chart is contiguous.
   const map = new Map(rows.map((r) => [r._id, r.count]));
   const series = [];
   for (let i = 0; i < days; i++) {
@@ -114,18 +135,25 @@ export const getUsersGrowth = asyncHandler(async (req, res) => {
     series.push({ date: key, count: map.get(key) ?? 0 });
   }
 
-  return okResponse(res, { days, series });
-});
+  return { days, series };
+};
 
 /**
  * GET /api/admin/stats/requests-by-status
  * Simple pie-chart fuel.
  */
 export const getRequestsByStatus = asyncHandler(async (_req, res) => {
-  const rows = await ServiceRequest.aggregate([
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]);
-  return okResponse(res, rows.map((r) => ({ status: r._id, count: r.count })));
+  const data = await withCache(
+    cacheKeys.adminStatsByStatus(),
+    STATS_TTL_SEC,
+    async () => {
+      const rows = await ServiceRequest.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]);
+      return rows.map((r) => ({ status: r._id, count: r.count }));
+    },
+  );
+  return okResponse(res, data);
 });
 
 /**
@@ -135,31 +163,36 @@ export const getRequestsByStatus = asyncHandler(async (_req, res) => {
 export const getTopWorkers = asyncHandler(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
 
-  const workers = await WorkerProfile.aggregate([
-    { $match: { ratingCount: { $gt: 0 } } },
-    { $sort: { rate: -1, ratingCount: -1 } },
-    { $limit: limit },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "user",
-        pipeline: [{ $project: { fullName: 1, email: 1, image: 1, isBlocked: 1 } }],
-      },
-    },
-    { $unwind: "$user" },
-    {
-      $project: {
-        _id: 1,
-        rate: 1,
-        ratingCount: 1,
-        yearsOfExperience: 1,
-        skills: 1,
-        user: 1,
-      },
-    },
-  ]);
+  const workers = await withCache(
+    cacheKeys.adminStatsTopWorkers(limit),
+    STATS_TTL_SEC,
+    () =>
+      WorkerProfile.aggregate([
+        { $match: { ratingCount: { $gt: 0 } } },
+        { $sort: { rate: -1, ratingCount: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "user",
+            pipeline: [{ $project: { fullName: 1, email: 1, image: 1, isBlocked: 1 } }],
+          },
+        },
+        { $unwind: "$user" },
+        {
+          $project: {
+            _id: 1,
+            rate: 1,
+            ratingCount: 1,
+            yearsOfExperience: 1,
+            skills: 1,
+            user: 1,
+          },
+        },
+      ]),
+  );
 
   return okResponse(res, workers);
 });
@@ -171,22 +204,27 @@ export const getTopWorkers = asyncHandler(async (req, res) => {
 export const getMostActiveCustomers = asyncHandler(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
 
-  const customers = await ServiceRequest.aggregate([
-    { $group: { _id: "$customerId", requestCount: { $sum: 1 } } },
-    { $sort: { requestCount: -1 } },
-    { $limit: limit },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "user",
-        pipeline: [{ $project: { fullName: 1, email: 1, image: 1, role: 1 } }],
-      },
-    },
-    { $unwind: "$user" },
-    { $project: { _id: 1, requestCount: 1, user: 1 } },
-  ]);
+  const customers = await withCache(
+    cacheKeys.adminStatsActiveCustomers(limit),
+    STATS_TTL_SEC,
+    () =>
+      ServiceRequest.aggregate([
+        { $group: { _id: "$customerId", requestCount: { $sum: 1 } } },
+        { $sort: { requestCount: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "user",
+            pipeline: [{ $project: { fullName: 1, email: 1, image: 1, role: 1 } }],
+          },
+        },
+        { $unwind: "$user" },
+        { $project: { _id: 1, requestCount: 1, user: 1 } },
+      ]),
+  );
 
   return okResponse(res, customers);
 });

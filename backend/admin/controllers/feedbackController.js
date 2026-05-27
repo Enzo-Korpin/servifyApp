@@ -5,6 +5,10 @@ import WorkerProfile from "../../models/workerProfile.js";
 import User from "../../models/user.js";
 import { NotFoundError } from "../../errors/httpErrors.js";
 import { okResponse, paginatedResponse } from "../utils/paginate.js";
+import {
+  invalidateAdminStats,
+  invalidateWorkerPublic,
+} from "../../lib/cache.js";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -107,6 +111,13 @@ export const deleteFeedback = asyncHandler(async (req, res) => {
   } finally {
     session.endSession();
   }
+
+  // Avg rating + feedback count + top workers list all derive from this
+  // collection — flush admin stats AND the affected worker's public cache.
+  await Promise.all([
+    invalidateAdminStats(),
+    invalidateWorkerPublic(fb.workerId),
+  ]);
 
   return okResponse(res, { _id: id, deleted: true });
 });

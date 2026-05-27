@@ -4,6 +4,7 @@ import ServiceRequest from "../../models/serviceRequest.js";
 import Feedback from "../../models/feedback.js";
 import User from "../../models/user.js";
 import { okResponse, paginatedResponse } from "../utils/paginate.js";
+import { withCache, cacheKeys } from "../../lib/cache.js";
 
 /**
  * GET /api/admin/notifications
@@ -36,25 +37,34 @@ export const listNotifications = asyncHandler(async (req, res) => {
  * High-level KPIs for the reports page — derived metrics (acceptance rate, etc.).
  */
 export const getReportsOverview = asyncHandler(async (_req, res) => {
-  const monthAgo = new Date();
-  monthAgo.setDate(monthAgo.getDate() - 30);
+  const data = await withCache(
+    cacheKeys.adminReportsOverview(),
+    60,
+    async () => {
+      const monthAgo = new Date();
+      monthAgo.setDate(monthAgo.getDate() - 30);
 
-  const [totalReq, accepted, completed, totalNotif, recentUsers] = await Promise.all([
-    ServiceRequest.countDocuments({}),
-    ServiceRequest.countDocuments({ status: "accepted" }),
-    Feedback.countDocuments({}),
-    Notification.countDocuments({}),
-    User.countDocuments({ createdAt: { $gte: monthAgo } }),
-  ]);
+      const [totalReq, accepted, completed, totalNotif, recentUsers] =
+        await Promise.all([
+          ServiceRequest.countDocuments({}),
+          ServiceRequest.countDocuments({ status: "accepted" }),
+          Feedback.countDocuments({}),
+          Notification.countDocuments({}),
+          User.countDocuments({ createdAt: { $gte: monthAgo } }),
+        ]);
 
-  return okResponse(res, {
-    requests: {
-      total: totalReq,
-      accepted,
-      acceptanceRate: totalReq === 0 ? 0 : Number(((accepted / totalReq) * 100).toFixed(1)),
+      return {
+        requests: {
+          total: totalReq,
+          accepted,
+          acceptanceRate:
+            totalReq === 0 ? 0 : Number(((accepted / totalReq) * 100).toFixed(1)),
+        },
+        feedback: { completedJobs: completed },
+        notifications: { total: totalNotif },
+        growth: { last30Days: recentUsers },
+      };
     },
-    feedback: { completedJobs: completed },
-    notifications: { total: totalNotif },
-    growth: { last30Days: recentUsers },
-  });
+  );
+  return okResponse(res, data);
 });

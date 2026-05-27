@@ -307,7 +307,160 @@ they're easy to revisit:
 
 ---
 
-## 9. Local checklist
+## 9. Redis (caching + admin rate limiting)
+
+Redis powers the following in the backend (admin **and** customer/worker app):
+
+| Use | Key pattern | TTL |
+| --- | --- | --- |
+| Admin dashboard stats | `admin:stats`, `admin:stats:growth:{days}`, `admin:stats:by-status`, `admin:stats:top-workers:{limit}`, `admin:stats:active:{limit}`, `admin:reports:overview` | 60 s |
+| Public worker profile (`GET /api/worker/:id`) | `worker:profile:{id}` | 120 s |
+| All-workers list (`GET /api/worker/allWorkers`) | `worker:all` | 60 s |
+| Per-admin rate limit on sensitive actions (block/delete) | `rate:admin:sensitive:{userId}` | 60 s window, 10 ops |
+| Per-user rate limit on `POST /service-requests/request` | `rate:user:create-request:{userId}` | 60 s window, 5 ops |
+| Per-user rate limit on `POST /feedback/:requestId` | `rate:user:submit-feedback:{userId}` | 60 s window, 5 ops |
+
+Cache invalidation map:
+
+| Mutation | Keys invalidated |
+| --- | --- |
+| Admin block/unblock user | `admin:stats*`, `worker:profile:{id}`, `worker:all` |
+| Admin delete user | `admin:stats*`, `worker:profile:{id}`, `worker:all` |
+| Admin delete service request | `admin:stats*` |
+| Admin delete feedback | `admin:stats*`, `worker:profile:{workerId}`, `worker:all` |
+| Worker updates own profile | `worker:profile:{id}`, `worker:all` |
+| Customer submits feedback | `worker:profile:{workerId}`, `worker:all`, `admin:stats*` |
+
+Helpers live in `backend/lib/cache.js` — see `invalidateAdminStats()` and
+`invalidateWorkerPublic(id)`.
+
+**What we cache and why**
+
+Admin side:
+- *Dashboard summary cards* — the 14 `Promise.all` counts + 1 average. Heavy
+  enough to feel sluggish at scale, idempotent, read constantly.
+- *Top workers / active customers* — aggregations with `$lookup`, perfect cache
+  candidates.
+- *Reports overview* — same shape as dashboard, same hit pattern.
+
+Customer/worker side:
+- *Public worker profile* (`GET /api/worker/:id`) — read by every customer
+  browsing the marketplace. Low cardinality (= number of workers),
+  read-heavy, rarely mutated. Excellent cache target.
+- *All-workers list* (`GET /api/worker/allWorkers`) — currently returns every
+  worker in a single query with no pagination. Caching protects MongoDB from
+  repeated full-collection reads on the home screen. **Note: this is masking
+  a real scale problem — add pagination eventually.**
+
+**What we deliberately do NOT cache**
+
+- Anything containing `password`, `resetPasswordCodeHash`,
+  `verificationCodeHash`, `fcmTokens`, or session/JWT tokens. The
+  `worker:profile:{id}` projection explicitly excludes these.
+- **Per-user profiles** (`GET /customer/profile`, `GET /worker/profile`,
+  `GET /worker/worker-status`) — key would be `user:{id}` → 1:1 with MongoDB,
+  no compression, real "stale data shown to wrong user" risk.
+- **Per-user request lists** (`GET /service-requests/customer`,
+  `GET /service-requests/worker`) — change on every accept/reject/cancel,
+  per-user keys, no payoff.
+- **Geo/search results** (`/customer/filtered-workers`, `/search-workers`,
+  `/search-filtered-workers`) — unbounded key cardinality (every lat/lng/radius
+  combo). Real-world cache hit rate ≈ 0. Textbook caching anti-pattern.
+- **Large paginated admin lists** (`/admin/users`, `/admin/feedback`, etc.) —
+  N filter combinations × N pages = wide-and-shallow cache. Lists are already
+  indexed and fast.
+- Per-user / per-resource detail views — they change often and are cheap.
+- Real-time data (chats, sockets) — Socket.IO doesn't go through Express
+  caching anyway.
+
+**Recommended future Redis additions (not done in this PR)**
+
+- **Socket.IO Redis adapter** (`@socket.io/redis-adapter`). Today chat
+  messages live in the in-memory state of whichever Node process holds the
+  client's socket — they don't propagate across replicas. The adapter uses
+  the existing Redis client to broadcast across instances. Highest-value
+  Redis addition the day you horizontally scale.
+- **OTP migration**. Verification + reset codes are still in MongoDB
+  (`PendingUser`, `User.resetPasswordCodeHash`) — hashed with TTL, already
+  works. Helpers + key conventions (`otp:verify:{email}`, `otp:reset:{email}`)
+  are ready when you want to migrate.
+- **Distributed locks** on race-prone flows — not needed today; the unique
+  index on `Feedback.requestId` and the `pending` partial-unique index on
+  `ServiceRequest` already handle the current races.
+
+**Why we kept arcjet for auth rate-limiting**
+
+arcjet already protects `signup`, `login`, `verify-email`, and
+`resend-verification` per IP. Layering a second Redis-based limiter on top
+buys nothing. The Redis-backed limiter runs in places arcjet doesn't apply:
+
+- admin sensitive actions (block, delete user, delete feedback, delete
+  service request) — keyed by **admin userId**, not IP
+- customer creates a service request — keyed by userId, prevents authenticated
+  spam that an IP limiter wouldn't catch (mobile users share NAT, NAT-shared
+  IP limits are blunt)
+- customer submits feedback — same reasoning
+
+**If Redis is down**
+
+- `getCache` returns `null` → controllers compute from MongoDB (slower, still
+  correct)
+- `setCache`/`deleteCache` are no-ops
+- `adminSensitiveLimiter` allows the request (fail-open — better than locking
+  yourself out of your own admin panel)
+- `connectRedis()` never rejects, so the API server boots normally
+- The BullMQ worker exits cleanly if `REDIS_ENABLED=false`
+
+**Running Redis locally**
+
+Three options, pick one:
+
+```bash
+# Option A — Docker Compose (recommended; brings up API + worker + Redis)
+docker compose -f docker-compose.dev.yml up
+
+# Option B — Standalone Docker
+docker run -p 6379:6379 --name servify-redis -d redis:7-alpine
+
+# Option C — disable Redis entirely (dev only)
+# add to .env:
+REDIS_ENABLED=false
+```
+
+On Windows without Docker: install [Memurai](https://www.memurai.com/) (Redis
+fork that runs natively on Windows), or use WSL2 + the standard `redis-server`
+package.
+
+**Testing Redis is working**
+
+```bash
+# 1. The server boots cleanly
+npm run dev
+# expect: "[redis] ready"
+
+# 2. Hit the stats endpoint twice — second hit should be noticeably faster
+# in the API logs (no aggregation). Or watch keys directly:
+redis-cli
+> KEYS admin:*
+> TTL admin:stats         # 1..60
+
+# 3. Mutation invalidation
+# Block a user from the dashboard. Then in redis-cli:
+> KEYS admin:*           # → (empty array)
+
+# 4. Rate limiter
+# Delete + restore + delete a user > 10 times in 60s — the 11th request
+# should return 429 RATE_LIMITED with a retryAfterSeconds payload.
+
+# 5. Graceful degrade — stop Redis and check the dashboard still loads:
+docker stop servify_redis
+# Dashboard pages still render from MongoDB. Logs will show
+# "[redis] connection error" but no requests fail.
+```
+
+---
+
+## 10. Local checklist
 
 ```bash
 # Backend

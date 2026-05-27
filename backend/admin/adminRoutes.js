@@ -2,6 +2,7 @@ import express from "express";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
 import { requireAdmin } from "./middleware/requireAdmin.js";
+import { adminSensitiveLimiter } from "../lib/rateLimit.js";
 
 import { validateQuery } from "./validators/validateQuery.js";
 import {
@@ -67,11 +68,17 @@ router.get("/users", validateQuery(listUsersSchema), listUsers);
 router.get("/users/:id", validateParams(idParamSchema), getUser);
 router.patch(
   "/users/:id/block",
+  adminSensitiveLimiter,
   validateParams(idParamSchema),
   validateBody(blockUserSchema),
   blockUser
 );
-router.delete("/users/:id", validateParams(idParamSchema), deleteUser);
+router.delete(
+  "/users/:id",
+  adminSensitiveLimiter,
+  validateParams(idParamSchema),
+  deleteUser
+);
 
 // ── Workers ─────────────────────────────────────────────────────────────────
 router.get("/workers", validateQuery(listWorkersSchema), listWorkers);
@@ -82,6 +89,7 @@ router.get("/service-requests", validateQuery(listRequestsSchema), listRequests)
 router.get("/service-requests/:id", validateParams(idParamSchema), getRequest);
 router.delete(
   "/service-requests/:id",
+  adminSensitiveLimiter,
   validateParams(idParamSchema),
   deleteRequest
 );
@@ -89,7 +97,12 @@ router.delete(
 // ── Feedback ────────────────────────────────────────────────────────────────
 router.get("/feedback", validateQuery(listFeedbackSchema), listFeedback);
 router.get("/feedback/:id", validateParams(idParamSchema), getFeedback);
-router.delete("/feedback/:id", validateParams(idParamSchema), deleteFeedback);
+router.delete(
+  "/feedback/:id",
+  adminSensitiveLimiter,
+  validateParams(idParamSchema),
+  deleteFeedback
+);
 
 // ── Notifications ───────────────────────────────────────────────────────────
 router.get(

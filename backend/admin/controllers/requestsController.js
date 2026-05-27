@@ -2,6 +2,7 @@ import { asyncHandler } from "../../middleware/asyncHandler.js";
 import ServiceRequest from "../../models/serviceRequest.js";
 import { NotFoundError } from "../../errors/httpErrors.js";
 import { okResponse, paginatedResponse } from "../utils/paginate.js";
+import { invalidateAdminStats } from "../../lib/cache.js";
 
 /**
  * GET /api/admin/service-requests
@@ -59,6 +60,8 @@ export const deleteRequest = asyncHandler(async (req, res) => {
 
   const deleted = await ServiceRequest.findByIdAndDelete(id).lean();
   if (!deleted) throw new NotFoundError("Request not found", "REQUEST_NOT_FOUND");
+
+  await invalidateAdminStats();
 
   return okResponse(res, { _id: id, deleted: true });
 });

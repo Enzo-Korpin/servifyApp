@@ -13,6 +13,17 @@ import {
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
 import { PassThrough } from "stream";
+import {
+  withCache,
+  cacheKeys,
+  invalidateWorkerPublic,
+} from "../lib/cache.js";
+
+// Public worker reads are hot-path (every customer browsing). Short TTL so
+// profile edits and new ratings propagate quickly; mutations invalidate
+// explicitly anyway.
+const WORKER_PUBLIC_TTL_SEC = 120;
+const WORKERS_ALL_TTL_SEC = 60;
 
 export const getWorkerProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -135,6 +146,10 @@ export const updateWorkerProfile = asyncHandler(async (req, res) => {
     await session.endSession();
   }
 
+  // Public profile data changed → drop the cached copies. Fire-and-forget;
+  // errors are swallowed by the helper and shouldn't block the response.
+  invalidateWorkerPublic(userId);
+
   return res.status(200).json({
     success: true,
     data: updatedWorkerProfile,
@@ -142,8 +157,15 @@ export const updateWorkerProfile = asyncHandler(async (req, res) => {
   });
 });
 
-export const getAllWorker = asyncHandler(async (req, res) => {
-  const workers = await WorkerProfile.find().populate("_id");
+export const getAllWorker = asyncHandler(async (_req, res) => {
+  // NOTE: this currently returns every worker in one shot — caching just hides
+  // the underlying scale problem. Add pagination later; for now the cache
+  // protects MongoDB from repeated full-collection reads on the home screen.
+  const workers = await withCache(
+    cacheKeys.workersAll(),
+    WORKERS_ALL_TTL_SEC,
+    () => WorkerProfile.find().populate("_id").lean(),
+  );
   return res.status(200).json({ success: true, data: workers, error: null });
 });
 
@@ -152,10 +174,21 @@ export const getWorkerById = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(workerId)) {
     throw new BadRequestError("Invalid worker ID", "INVALID_WORKER_ID");
   }
-  const worker = await WorkerProfile.findById(workerId).populate("_id", "-password");
-  if (!worker) {
-    throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
-  }
+
+  const worker = await withCache(
+    cacheKeys.workerProfilePublic(workerId),
+    WORKER_PUBLIC_TTL_SEC,
+    async () => {
+      const doc = await WorkerProfile.findById(workerId)
+        .populate("_id", "-password -resetPasswordCodeHash -resetPasswordCodeExpiry -fcmTokens")
+        .lean();
+      // Returning null here would poison the cache (null === miss), so we
+      // throw — withCache won't store it.
+      if (!doc) throw new NotFoundError("Worker not found", "WORKER_NOT_FOUND");
+      return doc;
+    },
+  );
+
   return res.status(200).json({ success: true, data: worker, error: null });
 });
 
