@@ -17,7 +17,7 @@ const NAV = [
   { to: "/admin/workers", label: "Workers", icon: Wrench },
   { to: "/admin/requests", label: "Service Requests", icon: ClipboardList },
   { to: "/admin/feedback", label: "Feedback", icon: Star },
-  { to: "/admin/notifications", label: "Notifications", icon: Bell },
+  { to: "/admin/notifications", label: "Notifications & Reports", icon: Bell },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
