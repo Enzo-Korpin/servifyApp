@@ -149,7 +149,8 @@ export const getAllFollowingWorkers = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1, _id: -1 })
     .limit(limit)
     .populate("workerId", "fullName email")
-    .select("-customerId");
+    .select("-customerId")
+    .lean();
 
   const following = docs.reverse();
 

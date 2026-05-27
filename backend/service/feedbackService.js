@@ -12,6 +12,10 @@ import {
   ConflictError,
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
+import {
+  invalidateAdminStats,
+  invalidateWorkerPublic,
+} from "../lib/cache.js";
 
 export const submitFeedback = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
@@ -106,6 +110,14 @@ export const submitFeedback = asyncHandler(async (req, res) => {
         },
       };
     });
+
+    // New rating → drop the worker's public cache (rating/count changed) and
+    // wipe admin stats (avg rating + top-workers list both shift).
+    // Fire-and-forget; failures don't block the response.
+    if (responseData?.feedback?.workerId) {
+      invalidateWorkerPublic(responseData.feedback.workerId);
+    }
+    invalidateAdminStats();
 
     return res.status(201).json({
       success: true,

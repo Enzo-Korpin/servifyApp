@@ -61,9 +61,11 @@ import feedbackRoutes from "./routes/feedbackRoutes.js";
 import workerRoutes from "./routes/workerRoutes.js";
 import aiRoutes from "./ai/ai.routes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import adminRoutes from "./admin/adminRoutes.js";
 
 import { connectDB } from "./db/connectDB.js";
 import { initSocket } from "./lib/socket.js";
+import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { RouteNotFound } from "./middleware/routeNoteFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -92,6 +94,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use(RouteNotFound);
 app.use(errorHandler);
@@ -101,11 +104,26 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   await connectDB();
 
+  // Redis is optional — connectRedis never rejects. If unreachable the app
+  // boots anyway and cache/rate-limit helpers fall back to no-op behavior.
+  await connectRedis();
+
   initSocket(server, { cors: corsOptions });
 
   server.listen(PORT, () => {
     console.log(`Server started on port ${PORT}`);
   });
+
+  // Graceful shutdown — close Redis cleanly so BullMQ flushes too.
+  const shutdown = async (signal) => {
+    console.log(`[server] received ${signal}, shutting down`);
+    server.close(async () => {
+      await disconnectRedis();
+      process.exit(0);
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 };
 
 startServer().catch((error) => {

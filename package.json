@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --legacy-watch backend/server.js",
     "start": "node backend/server.js",
-    "worker": "nodemon --legacy-watch backend/workers/redis.worker.js"
+    "worker": "nodemon --legacy-watch backend/workers/redis.worker.js",
+    "seed:admin": "node backend/admin/scripts/seedAdmin.js"
   },
   "keywords": [],
   "author": "",

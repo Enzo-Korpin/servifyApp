@@ -12,12 +12,16 @@ import {
 import { protectRoute } from "../middleware/protecteRoute.js";
 import { createServiceRequestValidation } from "../middleware/createServiceRequestValidation.js";
 import { requireCompletedOnboarding } from "../middleware/requireCompletedOnboarding.js";
+import { createRequestLimiter } from "../lib/rateLimit.js";
 
 const router = express.Router();
 
 router.post(
   "/request",
   protectRoute,
+  // Rate-limit per authenticated user (max 5 / minute). Runs AFTER protectRoute
+  // because the limiter needs req.user._id.
+  createRequestLimiter,
   createServiceRequestValidation,
   createServiceRequest,
 );
