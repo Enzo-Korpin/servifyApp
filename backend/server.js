@@ -94,14 +94,8 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/worker", workerRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/notifications", notificationRoutes);
-<<<<<<< HEAD
-app.get("/health", (req, res) => {
-  res.status(200).json({ success: true, message: "OK" });
-});
-=======
 app.use("/api/admin", adminRoutes);
 
->>>>>>> finishV1
 app.use(RouteNotFound);
 app.use(errorHandler);
 
