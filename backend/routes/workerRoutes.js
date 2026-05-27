@@ -7,7 +7,6 @@ import {
   switchRole,
   getWorkerProfile,
   updateWorkerProfile,
-  getAllWorker,
   getWorkerById,
 } from "../service/workerService.js";
 import { workerProfileValidation } from "../middleware/WorkerProfileValidation.js";
@@ -22,7 +21,6 @@ router.get(
   getWorkerStatus,
 );
 router.post("/switch-role", protectRoute, requireCompletedOnboarding, switchRole);
-router.get("/allWorkers", getAllWorker);
 router.get(
   "/profile",
   protectRoute,

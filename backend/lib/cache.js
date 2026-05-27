@@ -148,7 +148,6 @@ export const cacheKeys = {
   adminReportsOverview: () => "admin:reports:overview",
   // Public worker reads — read by every customer browsing the marketplace.
   workerProfilePublic: (id) => `worker:profile:${id}`,
-  workersAll: () => "worker:all",
   // Rate-limit buckets (in addition to admin:sensitive defined in rateLimit.js).
   rateUser: (userId, action) => `rate:user:${userId}:${action}`,
 };
@@ -166,12 +165,8 @@ export const invalidateAdminStats = () =>
  * block on it — the helper already swallows errors.
  *
  *   - drops worker:profile:{id} for the specific worker
- *   - drops worker:all because it embeds every worker
  */
 export const invalidateWorkerPublic = async (workerId) => {
   if (!workerId) return 0;
-  return deleteCache([
-    cacheKeys.workerProfilePublic(workerId.toString()),
-    cacheKeys.workersAll(),
-  ]);
+  return deleteCache(cacheKeys.workerProfilePublic(workerId.toString()));
 };

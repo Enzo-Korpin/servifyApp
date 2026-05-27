@@ -425,7 +425,6 @@ Prefix: `/api/worker`
 |---|---|---|---|
 | GET | `/service-requests/worker-status` | Worker request status summary | Yes |
 | POST | `/switch-role` | Switch active role | Yes |
-| GET | `/allWorkers` | Get workers | No |
 | GET | `/profile` | Get worker profile | Yes |
 | PUT | `/profile` | Update worker profile | Yes |
 | GET | `/:id` | Get worker by ID | No |

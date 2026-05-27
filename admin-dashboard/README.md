@@ -315,7 +315,6 @@ Redis powers the following in the backend (admin **and** customer/worker app):
 | --- | --- | --- |
 | Admin dashboard stats | `admin:stats`, `admin:stats:growth:{days}`, `admin:stats:by-status`, `admin:stats:top-workers:{limit}`, `admin:stats:active:{limit}`, `admin:reports:overview` | 60 s |
 | Public worker profile (`GET /api/worker/:id`) | `worker:profile:{id}` | 120 s |
-| All-workers list (`GET /api/worker/allWorkers`) | `worker:all` | 60 s |
 | Per-admin rate limit on sensitive actions (block/delete) | `rate:admin:sensitive:{userId}` | 60 s window, 10 ops |
 | Per-user rate limit on `POST /service-requests/request` | `rate:user:create-request:{userId}` | 60 s window, 5 ops |
 | Per-user rate limit on `POST /feedback/:requestId` | `rate:user:submit-feedback:{userId}` | 60 s window, 5 ops |
@@ -324,12 +323,12 @@ Cache invalidation map:
 
 | Mutation | Keys invalidated |
 | --- | --- |
-| Admin block/unblock user | `admin:stats*`, `worker:profile:{id}`, `worker:all` |
-| Admin delete user | `admin:stats*`, `worker:profile:{id}`, `worker:all` |
+| Admin block/unblock user | `admin:stats*`, `worker:profile:{id}` |
+| Admin delete user | `admin:stats*`, `worker:profile:{id}` |
 | Admin delete service request | `admin:stats*` |
-| Admin delete feedback | `admin:stats*`, `worker:profile:{workerId}`, `worker:all` |
-| Worker updates own profile | `worker:profile:{id}`, `worker:all` |
-| Customer submits feedback | `worker:profile:{workerId}`, `worker:all`, `admin:stats*` |
+| Admin delete feedback | `admin:stats*`, `worker:profile:{workerId}` |
+| Worker updates own profile | `worker:profile:{id}` |
+| Customer submits feedback | `worker:profile:{workerId}`, `admin:stats*` |
 
 Helpers live in `backend/lib/cache.js` — see `invalidateAdminStats()` and
 `invalidateWorkerPublic(id)`.
@@ -347,10 +346,6 @@ Customer/worker side:
 - *Public worker profile* (`GET /api/worker/:id`) — read by every customer
   browsing the marketplace. Low cardinality (= number of workers),
   read-heavy, rarely mutated. Excellent cache target.
-- *All-workers list* (`GET /api/worker/allWorkers`) — currently returns every
-  worker in a single query with no pagination. Caching protects MongoDB from
-  repeated full-collection reads on the home screen. **Note: this is masking
-  a real scale problem — add pagination eventually.**
 
 **What we deliberately do NOT cache**
 

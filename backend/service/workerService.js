@@ -23,7 +23,6 @@ import {
 // profile edits and new ratings propagate quickly; mutations invalidate
 // explicitly anyway.
 const WORKER_PUBLIC_TTL_SEC = 120;
-const WORKERS_ALL_TTL_SEC = 60;
 
 export const getWorkerProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -155,18 +154,6 @@ export const updateWorkerProfile = asyncHandler(async (req, res) => {
     data: updatedWorkerProfile,
     error: null,
   });
-});
-
-export const getAllWorker = asyncHandler(async (_req, res) => {
-  // NOTE: this currently returns every worker in one shot — caching just hides
-  // the underlying scale problem. Add pagination later; for now the cache
-  // protects MongoDB from repeated full-collection reads on the home screen.
-  const workers = await withCache(
-    cacheKeys.workersAll(),
-    WORKERS_ALL_TTL_SEC,
-    () => WorkerProfile.find().populate("_id").lean(),
-  );
-  return res.status(200).json({ success: true, data: workers, error: null });
 });
 
 export const getWorkerById = asyncHandler(async (req, res) => {
