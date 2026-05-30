@@ -32,6 +32,17 @@ const normalizeError = (err) => {
 };
 
 export const errorHandler = (err, req, res, next) => {
+  console.error("[ERROR]", {
+    method: req.method,
+    path: req.originalUrl,
+    message: err?.message,
+    name: err?.name,
+    code: err?.code,
+    command: err?.command,
+    response: err?.response,
+    responseCode: err?.responseCode,
+    stack: err?.stack,
+  });
   const normalized = normalizeError(err);
 
   const isAppError = normalized instanceof AppError;
