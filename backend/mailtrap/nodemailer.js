@@ -5,7 +5,7 @@ dotenv.config();
 
 const {
   SMTP_HOST = "smtp.gmail.com",
-  SMTP_PORT = "587",
+  SMTP_PORT = "465",
   SMTP_USER,
   SMTP_PASS,
   EMAIL_FROM,
