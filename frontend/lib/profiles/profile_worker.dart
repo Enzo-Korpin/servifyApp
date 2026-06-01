@@ -619,6 +619,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/profiles/worker_reviews_page.dart';
 import 'package:frontend/requests/service_requist_page.dart';
 import 'package:frontend/Follow/Follow_service.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1174,42 +1175,62 @@ class _ProfileWorkerState extends State<ProfileWorker> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildSectionCard(
-                  icon: Icons.reviews_outlined,
-                  title: "CUSTOMER REVIEWS",
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        rate.toStringAsFixed(1),
-                        style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1F2937),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => WorkerReviewsPage(
+                          workerId: widget.workerId,
+                          workerName: fullName,
+                          avgRating: rate,
+                          ratingCount: ratingCount,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(children: _buildStars(rate)),
-                              const SizedBox(height: 2),
-                              Text(
-                                "($ratingCount ${ratingCount == 1 ? "review" : "reviews"})",
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF9CA3AF),
-                                ),
-                              ),
-                            ],
+                    );
+                  },
+                  child: _buildSectionCard(
+                    icon: Icons.reviews_outlined,
+                    title: "CUSTOMER REVIEWS",
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rate.toStringAsFixed(1),
+                          style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1F2937),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: _buildStars(rate)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "($ratingCount ${ratingCount == 1 ? "review" : "reviews"})",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF9CA3AF),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Color(0xFFA2AAB8),
+                          size: 24,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
