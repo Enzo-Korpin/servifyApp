@@ -141,6 +141,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
         "email": widget.email,
         "code": widget.code,
         "newPassword": newPassword,
+        "confirmPassword": confirmPassword,
       },
     );
 

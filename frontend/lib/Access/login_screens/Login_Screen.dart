@@ -526,33 +526,6 @@ Future<void> _login() async {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _googleButton(),
-
-                      const SizedBox(width: 12),
-
-                      InkWell(
-                        onTap: () {
-                          _showMessage("Facebook login is not implemented yet");
-                        },
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          width: 64,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFDBEAFE),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Center(
-                            child: Image.asset(
-                              "assets/facebook.png",
-                              width: 70,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
 

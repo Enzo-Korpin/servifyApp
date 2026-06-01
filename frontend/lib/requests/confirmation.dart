@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/Home_pages/home_user.dart';
 import 'package:frontend/profiles/profile_worker.dart';
 import 'package:frontend/requests/Requists_page.dart';
+import 'package:frontend/Home_pages/smart_worker_map_page.dart';
+
 
 class ConfirmationScreen extends StatefulWidget {
   final String workerName;
@@ -498,7 +500,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen>
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (_) => const WorkerMapPage()),
+                                    builder: (_) => const SmartWorkerMapPage()),
                                 (route) => false,
                               );
                             },
