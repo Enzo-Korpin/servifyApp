@@ -32,6 +32,20 @@ class WorkerRequestService {
     }
   }
 
+  Future<Map<String, num>> getMyRating() async {
+    try {
+      final response = await DioClient.dio.get("/api/worker/profile");
+      final data = response.data["data"] as Map<String, dynamic>? ?? {};
+
+      return {
+        "rate": (data["rate"] ?? 0) as num,
+        "ratingCount": (data["ratingCount"] ?? 0) as num,
+      };
+    } on DioException catch (e) {
+      throw Exception(_extractErrorMessage(e));
+    }
+  }
+
   Future<CurrentUserModel> getCurrentUser() async {
     try {
       final response = await DioClient.dio.get("/api/auth/check-auth");

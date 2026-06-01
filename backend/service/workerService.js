@@ -30,7 +30,7 @@ export const getWorkerProfile = asyncHandler(async (req, res) => {
     throw new ForbiddenError("Must be Worker", "MUST_BE_WORKER");
   }
   const workerProfile = await WorkerProfile.findById(userId)
-    .select("bio yearsOfExperience skills")
+    .select("bio yearsOfExperience skills rate ratingCount")
     .populate("_id", "fullName image ");
   if (!workerProfile) {
     throw new NotFoundError("Worker profile not found", "WORKER_PROFILE_NOT_FOUND");

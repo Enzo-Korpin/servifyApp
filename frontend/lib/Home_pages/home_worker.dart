@@ -9,6 +9,7 @@ import '../Access/login_screens/Login_Screen.dart';
 import '../Access/login_screens/select_type.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/worker/worker_profile_screen.dart';
+import 'package:frontend/worker/worker_feedbacks_tab.dart';
 import 'package:frontend/chat/chat_page.dart';
 import 'package:frontend/ai/ai_chat_page.dart';
 import 'package:frontend/core/network/socket_client.dart';
@@ -91,6 +92,9 @@ class _HomeWorkerState extends State<HomeWorker>
 
   int _selectedIndex = 0;
   String _selectedStatus = "pending";
+
+  double _avgRating = 0;
+  int _ratingCount = 0;
 
   Map<String, int> _stats = {
     "pending": 0,
@@ -207,12 +211,14 @@ class _HomeWorkerState extends State<HomeWorker>
         _service.getWorkerStats(),
         _service.getWorkerRequests(status: _selectedStatus),
         _accountSwitchService.checkAuth(),
+        _service.getMyRating(),
       ]);
 
       final currentUser = results[0] as CurrentUserModel;
       final stats = results[1] as Map<String, int>;
       final firstPage = results[2] as PaginatedServiceRequestsResponse;
       final authUser = results[3] as AuthCheckUser;
+      final rating = results[4] as Map<String, num>;
 
       _statusData[_selectedStatus] = _statusData[_selectedStatus]!.copyWith(
         requests: firstPage.docs,
@@ -228,6 +234,8 @@ class _HomeWorkerState extends State<HomeWorker>
         _currentUser = currentUser;
         _stats = stats;
         _authUser = authUser;
+        _avgRating = (rating["rate"] ?? 0).toDouble();
+        _ratingCount = (rating["ratingCount"] ?? 0).toInt();
       });
 
       _entranceController.forward(from: 0);
@@ -635,6 +643,42 @@ class _HomeWorkerState extends State<HomeWorker>
     );
   }
 
+  Widget _buildRatingPill() {
+    final hasRatings = _ratingCount > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFB800).withOpacity(0.18),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasRatings)
+            Text(
+              _avgRating.toStringAsFixed(1),
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            )
+          else
+            Text(
+              "New",
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          const SizedBox(width: 3),
+          const Icon(Icons.star_rounded, color: Color(0xFFFFB800), size: 15),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNavyHeader() {
     return FadeTransition(
       opacity: _headerFade,
@@ -698,15 +742,25 @@ class _HomeWorkerState extends State<HomeWorker>
                                 color: const Color(0xFFB4D2FF).withOpacity(0.5),
                               ),
                             ),
-                            Text(
-                              _currentUser?.fullName.isNotEmpty == true
-                                  ? _currentUser!.fullName
-                                  : "Worker",
-                              style: GoogleFonts.inter(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _currentUser?.fullName.isNotEmpty == true
+                                        ? _currentUser!.fullName
+                                        : "Worker",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _buildRatingPill(),
+                              ],
                             ),
                           ],
                         ),
@@ -1123,10 +1177,25 @@ class _HomeWorkerState extends State<HomeWorker>
       case 2:
         return const AiChatPage();
       case 3:
+        return _buildMyFeedbacksPage();
+      case 4:
         return _buildProfilePage();
       default:
         return _buildRequestsPage();
     }
+  }
+
+  Widget _buildMyFeedbacksPage() {
+    final workerId = _currentUser?.id ?? "";
+    if (workerId.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: _navyMid));
+    }
+    return WorkerFeedbacksTab(
+      key: ValueKey("feedbacks-$workerId-$_ratingCount"),
+      workerId: workerId,
+      avgRating: _avgRating,
+      ratingCount: _ratingCount,
+    );
   }
 
   Widget _buildRequestsPage() {
@@ -1260,6 +1329,11 @@ class _HomeWorkerState extends State<HomeWorker>
             icon: Icon(Icons.smart_toy_outlined),
             activeIcon: Icon(Icons.smart_toy_rounded),
             label: "AI",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.star_outline_rounded),
+            activeIcon: Icon(Icons.star_rounded),
+            label: "My Feedbacks",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline_rounded),
