@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
 import 'package:frontend/core/network/socket_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/services/account_switch_service.dart';
 import '../Access/login_screens/Login_Screen.dart';
 import '../Access/login_screens/select_type.dart';
@@ -77,9 +78,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to load profile")),
-      );
+      AppNotify.error(context, "We couldn't load your profile.");
     }
   }
 
@@ -116,14 +115,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Image selected successfully")),
-      );
+      AppNotify.success(context, "Image selected.");
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to select image: $e")),
-      );
+      AppNotify.error(context, "We couldn't select that image. Please try another.");
     }
   }
 
@@ -141,14 +136,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Picture taken successfully")),
-      );
+      AppNotify.success(context, "Photo captured.");
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to take picture: $e")),
-      );
+      AppNotify.error(context, "We couldn't take a picture. Please try again.");
     }
   }
 
@@ -270,23 +261,21 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     _nameFocusNode.unfocus();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Profile updated")),
-    );
+    AppNotify.success(context, "Your profile has been updated.");
   } on DioException catch (e) {
-    final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Update failed";
-
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    AppNotify.error(
+      context,
+      AppNotify.messageFromError(
+        e,
+        fallback: "We couldn't update your profile. Please try again.",
+      ),
     );
   } catch (e) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Update failed")),
+    AppNotify.error(
+      context,
+      "We couldn't update your profile. Please try again.",
     );
   }
 }
@@ -317,28 +306,26 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         );
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Switched to $newCurrentRole account")),
-      );
+      AppNotify.success(context, "Switched to your $newCurrentRole account.");
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["error"]?["message"]?.toString() ??
-          e.response?.data?["message"]?.toString() ??
-          "Switch account failed";
-
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+      AppNotify.error(
+        context,
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't switch your account. Please try again.",
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Switch account failed: $e")),
+      AppNotify.error(
+        context,
+        "We couldn't switch your account. Please try again.",
       );
     } finally {
       if (mounted) {
@@ -367,9 +354,7 @@ Future<void> logoutUser() async {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Logged out successfully")),
-    );
+    AppNotify.success(context, "You've been logged out.");
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => SelectType()),
@@ -379,9 +364,7 @@ Future<void> logoutUser() async {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Logout failed: $e")),
-    );
+    AppNotify.error(context, "We couldn't log you out. Please try again.");
   } finally {
     if (mounted) {
       setState(() {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 class AddressField extends StatefulWidget {
@@ -20,7 +21,7 @@ class _AddressFieldState extends State<AddressField> {
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showError('Location services are disabled.');
+        _showError('Location services are turned off. Please enable them to continue.', isInfo: true);
         return;
       }
 
@@ -29,12 +30,12 @@ class _AddressFieldState extends State<AddressField> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          _showError('Location permission denied.');
+          _showError('We need location access to fill this in for you.', isInfo: true);
           return;
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        _showError('Location permission permanently denied.');
+        _showError('Location access is blocked. Please enable it in your settings.', isInfo: true);
         return;
       }
 
@@ -57,7 +58,7 @@ class _AddressFieldState extends State<AddressField> {
           // Final fallback: try to get last known position
           position = await Geolocator.getLastKnownPosition();
           if (position == null) {
-            _showError('Could not get location. Try typing manually.');
+            _showError("We couldn't get your location. Please type it manually.");
             return;
           }
         }
@@ -82,10 +83,13 @@ class _AddressFieldState extends State<AddressField> {
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
-    );
+  void _showError(String message, {bool isInfo = false}) {
+    if (!mounted) return;
+    if (isInfo) {
+      AppNotify.info(context, message);
+    } else {
+      AppNotify.error(context, message);
+    }
   }
 
   @override

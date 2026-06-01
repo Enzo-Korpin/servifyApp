@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/Access/verification/verify_reset_code_screen.dart';
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -48,19 +49,7 @@ Future<void> _sendVerificationCode() async {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "Verification code sent to your email",
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-    );
+    AppNotify.success(context, "We sent a verification code to your email.");
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -68,41 +57,21 @@ Future<void> _sendVerificationCode() async {
       ),
     );
   } on DioException catch (e) {
-    final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Failed to send verification code";
-
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+    AppNotify.error(
+      context,
+      AppNotify.messageFromError(
+        e,
+        fallback: "We couldn't send the verification code. Please try again.",
       ),
     );
   } catch (e) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "Failed to send verification code: $e",
-          style: GoogleFonts.inter(),
-        ),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
+    AppNotify.error(
+      context,
+      "We couldn't send the verification code. Please try again.",
     );
   } finally {
     if (mounted) {

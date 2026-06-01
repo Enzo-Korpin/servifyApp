@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AiChatPage extends StatefulWidget {
@@ -60,12 +61,9 @@ class _AiChatPageState extends State<AiChatPage> {
         await _loadMessages(_conversations.first["_id"]);
       }
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ??
-            "Failed to load conversations",
-      );
+      _showMessage(AppNotify.messageFromError(e, fallback: "We couldn't load your conversations. Please try again."));
     } catch (e) {
-      _showMessage("Failed to load conversations");
+      _showMessage(AppNotify.messageFromError(e, fallback: "We couldn't load your conversations. Please try again."));
     } finally {
       if (mounted) setState(() => _isLoadingConversations = false);
     }
@@ -105,11 +103,9 @@ class _AiChatPageState extends State<AiChatPage> {
 
       _scrollToBottom();
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to load messages",
-      );
+      _showMessage(AppNotify.messageFromError(e, fallback: "We couldn't load these messages. Please try again."));
     } catch (e) {
-      _showMessage("Failed to load messages");
+      _showMessage(AppNotify.messageFromError(e, fallback: "We couldn't load these messages. Please try again."));
     } finally {
       if (mounted) setState(() => _isLoadingMessages = false);
     }
@@ -164,11 +160,9 @@ class _AiChatPageState extends State<AiChatPage> {
       await _loadConversations();
       _scrollToBottom();
     } on DioException catch (e) {
-      _showMessage(
-        e.response?.data?["message"]?.toString() ?? "AI failed to respond",
-      );
+      _showMessage(AppNotify.messageFromError(e, fallback: "The assistant couldn't respond. Please try again."));
     } catch (e) {
-      _showMessage("AI failed to respond");
+      _showMessage(AppNotify.messageFromError(e, fallback: "The assistant couldn't respond. Please try again."));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -197,16 +191,7 @@ class _AiChatPageState extends State<AiChatPage> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E40AF),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    AppNotify.error(context, message);
   }
 
   @override

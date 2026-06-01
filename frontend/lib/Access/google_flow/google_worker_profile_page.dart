@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/Access/google_flow/google_auth_service.dart';
 import 'package:frontend/Home_pages/home_worker.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class GoogleWorkerProfilePage extends StatefulWidget {
@@ -43,18 +44,13 @@ class _GoogleWorkerProfilePageState extends State<GoogleWorkerProfilePage> {
     super.dispose();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: _cardBg,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   InputDecoration _inputDecoration({
@@ -293,14 +289,14 @@ class _GoogleWorkerProfilePageState extends State<GoogleWorkerProfilePage> {
         );
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Failed to complete worker profile";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't save your profile. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage("Failed to complete worker profile: $e");
+      _showMessage("We couldn't save your profile. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:frontend/core/network/socket_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/models/chat_message_model.dart';
 import 'package:frontend/models/chat_user_model.dart';
 import 'package:frontend/models/current_user_model.dart';
@@ -173,12 +174,7 @@ Future<void> _initializeChat() async {
       setState(() => _selectedImageFile = File(pickedFile.path));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to pick image: $error'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      AppNotify.error(context, "We couldn't pick that image. Please try another one.");
     } finally {
       if (mounted) setState(() => _pickingImage = false);
     }
@@ -190,9 +186,7 @@ Future<void> _initializeChat() async {
       return 'data:image/jpeg;base64,${base64Encode(bytes)}';
     } catch (error) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process image: $error')),
-      );
+      AppNotify.error(context, "We couldn't process that image. Please try another one.");
       return null;
     }
   }

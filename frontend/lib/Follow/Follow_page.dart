@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/profiles/profile_worker.dart';
 import 'package:frontend/Follow/Follow_service.dart';
 import 'Worker_Follow_card.dart';
@@ -42,16 +43,13 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error =
-            e.response?.data?["message"]?.toString() ??
-            e.response?.data?["error"]?.toString() ??
-            "Failed to load followed workers";
+        _error = AppNotify.messageFromError(e, fallback: "We couldn't load the workers you follow. Please try again.");
         _isLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = "Failed to load followed workers";
+        _error = "We couldn't load the workers you follow. Please try again.";
         _isLoading = false;
       });
     }
@@ -66,31 +64,13 @@ class _FollowedWorkersPageState extends State<FollowedWorkersPage> {
         followedWorkers.removeWhere((worker) => worker["workerId"] == workerId);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Worker unfollowed"),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppNotify.success(context, "You unfollowed this worker.");
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Failed to unfollow";
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (!mounted) return;
+      AppNotify.error(context, AppNotify.messageFromError(e, fallback: "We couldn't unfollow this worker. Please try again."));
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Failed to unfollow"),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (!mounted) return;
+      AppNotify.error(context, "We couldn't unfollow this worker. Please try again.");
     }
   }
 

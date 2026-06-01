@@ -4,6 +4,7 @@ import 'package:frontend/Access/google_flow/google_auth_service.dart';
 import 'package:frontend/Access/login_screens/Login_Screen.dart';
 import 'package:frontend/Home_pages/smart_worker_map_page.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'Picklocation.dart';
@@ -159,21 +160,13 @@ class _SignupUserState extends State<SignupUser>
     );
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: const Color(0xFF16305E),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> _pickAddressFromMap() async {
@@ -240,7 +233,10 @@ class _SignupUserState extends State<SignupUser>
           response.statusCode == 202) {
         if (!mounted) return;
 
-        _showMessage("Registration successful! Check your email.");
+        _showMessage(
+          "Account created! Check your email for the code.",
+          isError: false,
+        );
 
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -251,17 +247,17 @@ class _SignupUserState extends State<SignupUser>
           ),
         );
       } else {
-        _showMessage("Signup failed");
+        _showMessage("We couldn't create your account. Please try again.");
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Signup failed";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't create your account. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage("Signup failed: $e");
+      _showMessage("We couldn't create your account. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -290,17 +286,17 @@ class _SignupUserState extends State<SignupUser>
           (route) => false,
         );
       } else {
-        _showMessage("Google signup failed");
+        _showMessage("We couldn't sign you up with Google. Please try again.");
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Google signup failed";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't sign you up with Google. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage(e.toString());
+      _showMessage("We couldn't sign you up with Google. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

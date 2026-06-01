@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/ui/app_notify.dart';
 import '../../models/service_request_model.dart';
 
 class WorkerOrderCard extends StatelessWidget {
@@ -61,9 +62,7 @@ class WorkerOrderCard extends StatelessWidget {
 
   Future<void> _openGoogleMaps(BuildContext context) async {
     if (!_hasCoordinates) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Location is not available")),
-      );
+      AppNotify.info(context, "No location is available for this request.");
       return;
     }
 
@@ -81,9 +80,7 @@ class WorkerOrderCard extends StatelessWidget {
     );
 
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not open Google Maps")),
-      );
+      AppNotify.error(context, "We couldn't open Google Maps.");
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:frontend/core/map/map_config.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -121,7 +122,7 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
         _mapController.move(location, 15);
       }
 
-      _showMessage("Current location selected");
+      _showMessage("Using your current location.", isError: false);
     } finally {
       if (mounted) {
         setState(() {
@@ -144,12 +145,13 @@ class _PickLocationScreenState extends State<PickLocationScreen> {
     });
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   @override

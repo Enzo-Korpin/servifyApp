@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/requests/Widgets/card_provider.dart';
 import 'package:frontend/requests/confirmation.dart';
 import '../Access/signup_screens/Picklocation.dart';
@@ -52,17 +53,15 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
     super.dispose();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = false, bool isInfo = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else if (isInfo) {
+      AppNotify.info(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> _pickLocationFromMap() async {
@@ -87,10 +86,10 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
     final message     = _descController.text.trim();
     final addressText = _addressController.text.trim();
 
-    if (message.isEmpty)     { _showMessage("Please describe the problem"); return; }
-    if (addressText.isEmpty) { _showMessage("Please enter the address"); return; }
+    if (message.isEmpty)     { _showMessage("Please describe the problem first."); return; }
+    if (addressText.isEmpty) { _showMessage("Please enter an address."); return; }
     if (selectedLat == null || selectedLng == null) {
-      _showMessage("Please pick location from map");
+      _showMessage("Please pick a location on the map.");
       return;
     }
     if (_isSubmitting) return;
@@ -133,12 +132,14 @@ class _ServiceRequestScreenState extends State<ServiceRequestScreen> {
       );
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Failed to submit request",
+        AppNotify.messageFromError(e, fallback: "We couldn't submit your request. Please try again."),
+        isError: true,
       );
     } catch (e) {
-      _showMessage("Failed to submit request");
+      _showMessage(
+        AppNotify.messageFromError(e, fallback: "We couldn't submit your request. Please try again."),
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

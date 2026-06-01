@@ -7,6 +7,7 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:frontend/Home_pages/worker_card.dart';
 import 'package:frontend/core/map/map_config.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/profiles/profile_user.dart';
 import 'package:frontend/requests/Requists_page.dart';
 import 'package:geolocator/geolocator.dart';
@@ -148,7 +149,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
     final routes = response.data["routes"] as List;
 
     if (routes.isEmpty) {
-      _showMessage("No route found");
+      _showMessage("We couldn't find a route there.");
       return;
     }
 
@@ -172,9 +173,10 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
 
     _showMessage(
       "Route: ${distanceKm.toStringAsFixed(1)} km • ${durationMin.toStringAsFixed(0)} min",
+      isInfo: true,
     );
   } catch (e) {
-    _showMessage("Failed to load route");
+    _showMessage("We couldn't load the route. Please try again.");
   }
 }
 
@@ -277,7 +279,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
         _userLat = _fallbackLocation.latitude;
         _userLng = _fallbackLocation.longitude;
       });
-      _showMessage("Using default location");
+      _showMessage("Showing a default location for now.", isInfo: true);
     }
 
     await _reloadWorkers(reset: true);
@@ -299,7 +301,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
       final coords = (data["data"]?["location"]?["coordinates"] ?? []) as List;
 
       if (coords.length != 2) {
-        _showMessage("User location not found");
+        _showMessage("We couldn't find your saved location.");
         return;
       }
 
@@ -329,11 +331,13 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
 }
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ??
-            "Failed to load user location",
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't load your location. Please try again.",
+        ),
       );
     } catch (e) {
-      _showMessage("Failed to load user location: $e");
+      _showMessage("We couldn't load your location. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoadingUserLocation = false);
     }
@@ -347,7 +351,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showMessage("Location services are disabled");
+        _showMessage("Turn on location services to continue.");
         return;
       }
 
@@ -357,12 +361,14 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
       }
 
       if (permission == LocationPermission.denied) {
-        _showMessage("Location permission denied");
+        _showMessage("We need location permission to find nearby workers.");
         return;
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _showMessage("Location permission permanently denied");
+        _showMessage(
+          "Location permission is blocked. Enable it in Settings.",
+        );
         return;
       }
 
@@ -382,7 +388,7 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
         } catch (_) {
           position = await Geolocator.getLastKnownPosition();
           if (position == null) {
-            _showMessage("Could not determine location.");
+            _showMessage("We couldn't determine your location.");
             return;
           }
         }
@@ -403,13 +409,16 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
       }
 
       await _reloadWorkers(reset: true);
-      _showMessage("Showing workers near your current location");
+      _showMessage("Showing workers near you.", isInfo: true);
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to get location",
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't get your location. Please try again.",
+        ),
       );
     } catch (e) {
-      _showMessage("Failed to get location: $e");
+      _showMessage("We couldn't get your location. Please try again.");
     } finally {
       if (mounted) setState(() => _isGettingLocation = false);
     }
@@ -503,11 +512,13 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
       _triggerAnimation(_allWorkers.length);
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ??
-            "Failed to load workers",
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't load workers. Please try again.",
+        ),
       );
     } catch (e) {
-      _showMessage("Failed to load workers: $e");
+      _showMessage("We couldn't load workers. Please try again.");
     } finally {
       if (mounted) {
         setState(() {
@@ -618,18 +629,15 @@ Future<void> _showRouteToWorker(Map<String, dynamic> worker) async {
     _animController.forward();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true, bool isInfo = false}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E40AF),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isInfo) {
+      AppNotify.info(context, message);
+    } else if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> _onCategoryTap(Category category) async {

@@ -13,6 +13,7 @@ import 'package:frontend/chat/chat_page.dart';
 import 'package:frontend/ai/ai_chat_page.dart';
 import 'package:frontend/core/network/socket_client.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 
 class _StatusState {
   static const Object _unset = Object();
@@ -270,7 +271,7 @@ class _HomeWorkerState extends State<HomeWorker>
         _statusData[status] =
             _statusData[status]!.copyWith(isLoading: false, error: e.toString());
       });
-      _showSnack("Failed to load $status requests: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't load your requests. Please try again."));
     }
   }
 
@@ -323,7 +324,7 @@ class _HomeWorkerState extends State<HomeWorker>
         _statusData[_selectedStatus] = _statusData[_selectedStatus]!
             .copyWith(isLoadingMore: false, error: e.toString());
       });
-      _showSnack("Failed to load more: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't load more requests. Please try again."));
     }
   }
 
@@ -366,7 +367,7 @@ class _HomeWorkerState extends State<HomeWorker>
         _statusData[_selectedStatus] = _statusData[_selectedStatus]!
             .copyWith(isLoading: false, error: e.toString());
       });
-      _showSnack("Refresh failed: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't refresh. Please try again."));
     }
   }
 
@@ -376,10 +377,10 @@ class _HomeWorkerState extends State<HomeWorker>
       await _service.acceptRequest(requestId);
       await _refreshCurrentTab();
       if (!mounted) return;
-      _showSnack("Request accepted successfully");
+      _showSnack("Request accepted.", isError: false);
     } catch (e) {
       if (!mounted) return;
-      _showSnack("Accept failed: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't accept this request. Please try again."));
     } finally {
       if (mounted) setState(() => _isActionLoading = false);
     }
@@ -462,10 +463,10 @@ class _HomeWorkerState extends State<HomeWorker>
       await _service.rejectRequest(requestId, rejectReason: reason);
       await _refreshCurrentTab();
       if (!mounted) return;
-      _showSnack("Request rejected successfully");
+      _showSnack("Request rejected.", isError: false);
     } catch (e) {
       if (!mounted) return;
-      _showSnack("Reject failed: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't reject this request. Please try again."));
     } finally {
       if (mounted) setState(() => _isActionLoading = false);
     }
@@ -493,7 +494,7 @@ class _HomeWorkerState extends State<HomeWorker>
         );
       });
 
-      _showSnack("Switched to $newRole account");
+      _showSnack("Switched to your $newRole account.", isError: false);
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -501,30 +502,22 @@ class _HomeWorkerState extends State<HomeWorker>
       );
     } on DioException catch (e) {
       if (!mounted) return;
-      _showSnack(
-        e.response?.data?["error"]?["message"]?.toString() ??
-            e.response?.data?["message"]?.toString() ??
-            "Switch account failed",
-      );
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't switch accounts. Please try again."));
     } catch (e) {
       if (!mounted) return;
-      _showSnack("Switch account failed: $e");
+      _showSnack(AppNotify.messageFromError(e, fallback: "We couldn't switch accounts. Please try again."));
     } finally {
       if (mounted) setState(() => _isSwitchingAccount = false);
     }
   }
 
-  void _showSnack(String message) {
+  void _showSnack(String message, {bool isError = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.inter()),
-        backgroundColor: _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> logoutUser() async {
@@ -544,9 +537,7 @@ class _HomeWorkerState extends State<HomeWorker>
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Logged out successfully")),
-      );
+      AppNotify.success(context, "You've been logged out.");
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SelectType()),
@@ -555,9 +546,7 @@ class _HomeWorkerState extends State<HomeWorker>
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Logout failed: $e")),
-      );
+      AppNotify.error(context, AppNotify.messageFromError(e, fallback: "We couldn't log you out. Please try again."));
     } finally {
       if (mounted) {
         setState(() {

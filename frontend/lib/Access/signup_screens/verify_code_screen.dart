@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/Access/login_screens/Login_screen.dart';
 
@@ -105,21 +106,11 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen>
 
   void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: isError ? const Color(0xFFE24B4A) : _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
  Future<void> _verifyCode() async {
@@ -165,19 +156,19 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen>
         (route) => false,
       );
     } else {
-      _showMessage("Invalid or expired verification code");
+      _showMessage("That code is invalid or has expired.");
     }
   } on DioException catch (e) {
     debugPrint("VERIFY ERROR: ${e.response?.data}");
 
-    final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Invalid or expired verification code";
-
-    _showMessage(message);
+    _showMessage(
+      AppNotify.messageFromError(
+        e,
+        fallback: "That code is invalid or has expired.",
+      ),
+    );
   } catch (e) {
-    _showMessage("Verification failed: $e");
+    _showMessage("We couldn't verify the code. Please try again.");
   } finally {
     if (mounted) {
       setState(() {
@@ -188,7 +179,8 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen>
 }
 
   Future<void> _resendCode() async {
-    _showMessage("Resend is not connected yet", isError: false);
+    if (!mounted) return;
+    AppNotify.info(context, "Resending codes isn't available yet.");
   }
 
   Widget _buildDigitField(int index) {

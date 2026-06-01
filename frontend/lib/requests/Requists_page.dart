@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/ui/app_notify.dart';
 import '../../models/request_model.dart';
 import '../../services/request_service.dart';
 import '../../../requests/widgets/request_card_widget.dart';
@@ -158,39 +159,24 @@ Future<void> _rateRequest(RequestModel request) async {
       }
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Feedback submitted successfully'),
-      ),
-    );
+    AppNotify.success(context, 'Thanks! Your feedback was submitted.');
   } catch (e) {
     if (!mounted) return;
 
-    String message = 'Failed to submit feedback';
-
-    if (e is DioException) {
-      final code = e.response?.data?['error']?['code']?.toString();
-
-      if (code == 'FEEDBACK_ALREADY_SUBMITTED') {
-        message = 'You already rated this request';
-
-        setState(() {
-          final index = _requests.indexWhere((r) => r.id == request.id);
-          if (index != -1) {
-            _requests[index] = _requests[index].copyWith(hasFeedback: true);
-          }
-        });
-      } else {
-        message = e.response?.data?['message']?.toString() ??
-            e.response?.data?['error']?['message']?.toString() ??
-            e.response?.data?['error']?.toString() ??
-            message;
-      }
+    if (e is DioException &&
+        e.response?.data?['error']?['code']?.toString() ==
+            'FEEDBACK_ALREADY_SUBMITTED') {
+      setState(() {
+        final index = _requests.indexWhere((r) => r.id == request.id);
+        if (index != -1) {
+          _requests[index] = _requests[index].copyWith(hasFeedback: true);
+        }
+      });
+      AppNotify.info(context, "You've already rated this request.");
+      return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    AppNotify.error(context, AppNotify.messageFromError(e, fallback: "We couldn't submit your feedback. Please try again."));
   }
 }
 
@@ -227,7 +213,7 @@ Future<void> _rateRequest(RequestModel request) async {
         _hasMore = response.docs.isNotEmpty && response.nextCursor != null;
       });
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to load requests');
+      setState(() => _errorMessage = "We couldn't load your requests. Please try again.");
     } finally {
       setState(() {
         _isLoading = false;
@@ -301,25 +287,10 @@ Future<void> _rateRequest(RequestModel request) async {
         _requests.removeWhere((r) => r.id == request.id);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Request cancelled successfully'),
-        ),
-      );
+      AppNotify.success(context, 'Your request was cancelled.');
     } catch (e) {
       if (!mounted) return;
-
-      String message = 'Failed to cancel request';
-
-      if (e is DioException) {
-        message = e.response?.data?['message']?.toString() ??
-            e.response?.data?['error']?.toString() ??
-            message;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      AppNotify.error(context, AppNotify.messageFromError(e, fallback: "We couldn't cancel this request. Please try again."));
     }
   }
 

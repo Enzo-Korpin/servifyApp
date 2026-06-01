@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class WorkerReviewsPage extends StatefulWidget {
@@ -58,20 +59,15 @@ class _WorkerReviewsPageState extends State<WorkerReviewsPage> {
         _isLoading = false;
       });
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Failed to load reviews";
-
       if (!mounted) return;
       setState(() {
-        _error = message;
+        _error = AppNotify.messageFromError(e, fallback: "We couldn't load the reviews. Please try again.");
         _isLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = "Failed to load reviews";
+        _error = "We couldn't load the reviews. Please try again.";
         _isLoading = false;
       });
     }

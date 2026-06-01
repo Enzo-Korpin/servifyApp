@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/Access/verification/reset_password.dart';
 
 class VerifyResetCodeScreen extends StatefulWidget {
@@ -102,21 +103,11 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
 
   void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: isError ? const Color(0xFFE24B4A) : _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> _verifyCode() async {
@@ -148,7 +139,7 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
 
       if (response.statusCode == 200) {
         _showMessage(
-          "Code verified successfully",
+          "Code verified. You can set a new password now.",
           isError: false,
         );
 
@@ -163,18 +154,17 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
           ),
         );
       } else {
-        _showMessage("Invalid or expired verification code");
+        _showMessage("That code is invalid or has expired.");
       }
     } on DioException catch (e) {
-
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Invalid or expired verification code";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "That code is invalid or has expired.",
+        ),
+      );
     } catch (e) {
-      _showMessage("Verification failed: $e");
+      _showMessage("We couldn't verify the code. Please try again.");
     } finally {
       if (mounted) {
         setState(() {
@@ -199,18 +189,18 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen>
 
 
       _showMessage(
-        "Verification code sent again",
+        "We sent you a new code.",
         isError: false,
       );
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Failed to resend code";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't resend the code. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage("Failed to resend code: $e");
+      _showMessage("We couldn't resend the code. Please try again.");
     } finally {
       if (mounted) {
         setState(() {

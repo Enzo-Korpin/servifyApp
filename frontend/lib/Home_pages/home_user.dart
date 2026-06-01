@@ -5,6 +5,7 @@ import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:frontend/Home_pages/worker_card.dart';
 import 'package:frontend/core/map/map_config.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/profiles/profile_user.dart';
 import 'package:frontend/requests/Requists_page.dart';
 import 'package:geolocator/geolocator.dart';
@@ -185,10 +186,14 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       _triggerAnimation(_allWorkers.length);
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to search workers",
+        AppNotify.messageFromError(e, fallback: "We couldn't search workers right now. Please try again."),
+        isError: true,
       );
     } catch (e) {
-      _showMessage("Failed to search workers: $e");
+      _showMessage(
+        AppNotify.messageFromError(e, fallback: "We couldn't search workers right now. Please try again."),
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -287,7 +292,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       final data = response.data;
       final coords = (data["data"]?["location"]?["coordinates"] ?? []) as List;
       if (coords.length != 2) {
-        _showMessage("User location not found");
+        _showMessage("We couldn't find your saved location.");
         return;
       }
       final lng = (coords[0] as num).toDouble();
@@ -305,11 +310,14 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       }
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ??
-            "Failed to load user location",
+        AppNotify.messageFromError(e, fallback: "We couldn't load your location. Please try again."),
+        isError: true,
       );
     } catch (e) {
-      _showMessage("Failed to load user location: $e");
+      _showMessage(
+        AppNotify.messageFromError(e, fallback: "We couldn't load your location. Please try again."),
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isLoadingUserLocation = false);
     }
@@ -321,18 +329,18 @@ class _WorkerMapPageState extends State<WorkerMapPage>
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showMessage("Location services are disabled");
+        _showMessage("Location services are turned off. Please enable them to continue.");
         return;
       }
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied)
         permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        _showMessage("Location permission denied");
+        _showMessage("We need location access to show nearby workers.");
         return;
       }
       if (permission == LocationPermission.deniedForever) {
-        _showMessage("Location permission permanently denied");
+        _showMessage("Location access is blocked. Please enable it in your settings.");
         return;
       }
 
@@ -351,7 +359,7 @@ class _WorkerMapPageState extends State<WorkerMapPage>
         } catch (_) {
           position = await Geolocator.getLastKnownPosition();
           if (position == null) {
-            _showMessage("Could not determine location.");
+            _showMessage("We couldn't determine your location.", isError: true);
             return;
           }
         }
@@ -368,13 +376,17 @@ class _WorkerMapPageState extends State<WorkerMapPage>
           _mapController.camera.zoom == 0 ? 13.0 : _mapController.camera.zoom,
         );
       await _fetchWorkers();
-      _showMessage("Showing workers near your current location");
+      _showMessage("Showing workers near you.");
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to get location",
+        AppNotify.messageFromError(e, fallback: "We couldn't get your location. Please try again."),
+        isError: true,
       );
     } catch (e) {
-      _showMessage("Failed to get location: $e");
+      _showMessage(
+        AppNotify.messageFromError(e, fallback: "We couldn't get your location. Please try again."),
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isGettingLocation = false);
     }
@@ -438,10 +450,14 @@ class _WorkerMapPageState extends State<WorkerMapPage>
       if (mounted) setState(() {});
     } on DioException catch (e) {
       _showMessage(
-        e.response?.data?["message"]?.toString() ?? "Failed to load workers",
+        AppNotify.messageFromError(e, fallback: "We couldn't load workers right now. Please try again."),
+        isError: true,
       );
     } catch (e) {
-      _showMessage("Failed to load workers: $e");
+      _showMessage(
+        AppNotify.messageFromError(e, fallback: "We couldn't load workers right now. Please try again."),
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isLoadingWorkers = false);
     }
@@ -475,17 +491,15 @@ class _WorkerMapPageState extends State<WorkerMapPage>
   }
   List<Map<String, dynamic>> get _visibleWorkers => List.from(_allWorkers);
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = false, bool isInfo = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E40AF),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else if (isInfo) {
+      AppNotify.info(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
 Future<void> _onCategoryTap(Category category) async {

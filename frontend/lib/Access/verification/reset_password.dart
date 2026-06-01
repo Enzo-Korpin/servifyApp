@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/Access/login_screens/Login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -98,17 +99,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
 
   void _showSnack(String message, {bool isError = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.inter()),
-        backgroundColor:
-            isError ? const Color(0xFFE24B4A) : _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
  Future<void> _onResetPressed() async {
@@ -146,7 +141,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     );
 
 
-    _showSnack("Password reset successfully", isError: false);
+    _showSnack("Your password has been reset.", isError: false);
 
     if (!mounted) return;
 
@@ -157,14 +152,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
       (route) => false,
     );
   } on DioException catch (e) {
-    final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Failed to reset password";
-
-    _showSnack(message);
+    _showSnack(
+      AppNotify.messageFromError(
+        e,
+        fallback: "We couldn't reset your password. Please try again.",
+      ),
+    );
   } catch (e) {
-    _showSnack("Failed to reset password: $e");
+    _showSnack("We couldn't reset your password. Please try again.");
   } finally {
     if (mounted) {
       setState(() {

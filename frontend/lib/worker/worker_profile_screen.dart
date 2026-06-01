@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:image_picker/image_picker.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
@@ -142,13 +143,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     } on DioException catch (e) {
       setState(() => _isLoading = false);
       _showSnack(
-        e.response?.data?["error"]?["message"]?.toString() ??
-            e.response?.data?["message"]?.toString() ??
-            "Failed to load worker profile",
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't load your profile. Please try again.",
+        ),
       );
     } catch (_) {
       setState(() => _isLoading = false);
-      _showSnack("Failed to load worker profile");
+      _showSnack("We couldn't load your profile. Please try again.");
     }
   }
 
@@ -178,9 +180,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       });
 
       if (!mounted) return;
-      _showSnack("Image selected successfully");
+      _showSnack("Image selected.", isError: false);
     } catch (e) {
-      _showSnack("Failed to pick image: ${e.toString()}");
+      _showSnack("We couldn't select that image. Please try another.");
     }
   }
 
@@ -409,17 +411,18 @@ Future<void> _saveProfile() async {
 
     if (!mounted) return;
 
-    _showSnack("Worker profile updated successfully");
+    _showSnack("Your profile has been updated.", isError: false);
 
     Navigator.pop(context, true);
   } on DioException catch (e) {
     _showSnack(
-      e.response?.data?["error"]?["message"]?.toString() ??
-          e.response?.data?["message"]?.toString() ??
-          "Update failed",
+      AppNotify.messageFromError(
+        e,
+        fallback: "We couldn't update your profile. Please try again.",
+      ),
     );
   } catch (_) {
-    _showSnack("Update failed");
+    _showSnack("We couldn't update your profile. Please try again.");
   } finally {
     if (mounted) {
       setState(() => _isSaving = false);
@@ -427,17 +430,13 @@ Future<void> _saveProfile() async {
   }
 }
 
-  void _showSnack(String msg) {
+  void _showSnack(String msg, {bool isError = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: GoogleFonts.inter()),
-        backgroundColor: _navyMid,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, msg);
+    } else {
+      AppNotify.success(context, msg);
+    }
   }
 
 

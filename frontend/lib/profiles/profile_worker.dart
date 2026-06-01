@@ -619,6 +619,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:frontend/profiles/worker_reviews_page.dart';
 import 'package:frontend/requests/service_requist_page.dart';
 import 'package:frontend/Follow/Follow_service.dart';
@@ -694,20 +695,15 @@ class _ProfileWorkerState extends State<ProfileWorker> {
         _isLoading = false;
       });
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Failed to load worker profile";
-
       if (!mounted) return;
       setState(() {
-        _error = message;
+        _error = AppNotify.messageFromError(e, fallback: "We couldn't load this profile. Please try again.");
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "Failed to load worker profile";
+        _error = "We couldn't load this profile. Please try again.";
         _isLoading = false;
       });
     }
@@ -729,7 +725,7 @@ class _ProfileWorkerState extends State<ProfileWorker> {
           _isFollowing = false;
         });
 
-        _showMessage("Worker unfollowed");
+        _showMessage("Unfollowed.", isError: false);
       } else {
         await _followService.followWorker(widget.workerId);
 
@@ -738,17 +734,17 @@ class _ProfileWorkerState extends State<ProfileWorker> {
           _isFollowing = true;
         });
 
-        _showMessage("Worker followed successfully");
+        _showMessage("You're now following this worker.", isError: false);
       }
     } on DioException catch (e) {
-      final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        e.response?.data.toString() ??
-        "Failed to update follow";
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't update follow. Please try again.",
+        ),
+      );
     } catch (_) {
-      _showMessage("Failed to update follow");
+      _showMessage("We couldn't update follow. Please try again.");
     } finally {
       if (mounted) {
         setState(() {
@@ -758,16 +754,13 @@ class _ProfileWorkerState extends State<ProfileWorker> {
     }
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   String get aboutTitle {

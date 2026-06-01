@@ -9,6 +9,7 @@ import 'package:frontend/Access/login_screens/Login_screen.dart';
 import 'package:frontend/Access/signup_screens/verify_code_screen.dart';
 import 'package:frontend/Home_pages/home_worker.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -63,18 +64,13 @@ class _StartUserState extends State<StartUser> {
     super.dispose();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: _cardBg,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   Future<void> _pickImage() async {
@@ -90,7 +86,7 @@ class _StartUserState extends State<StartUser> {
         _selectedImage = File(picked.path);
       });
     } catch (e) {
-      _showMessage("Failed to pick image: $e");
+      _showMessage("We couldn't open that image. Please try another.");
     }
   }
 
@@ -159,7 +155,10 @@ class _StartUserState extends State<StartUser> {
           response.statusCode == 202) {
         if (!mounted) return;
 
-        _showMessage("Registration successful! Check your email.");
+        _showMessage(
+          "Account created! Check your email for the code.",
+          isError: false,
+        );
 
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -170,17 +169,17 @@ class _StartUserState extends State<StartUser> {
           ),
         );
       } else {
-        _showMessage("Signup failed");
+        _showMessage("We couldn't create your account. Please try again.");
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Signup failed";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't create your account. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage("An error occurred: $e");
+      _showMessage("We couldn't create your account. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -220,17 +219,17 @@ class _StartUserState extends State<StartUser> {
           );
         }
       } else {
-        _showMessage("Google signup failed");
+        _showMessage("We couldn't sign you up with Google. Please try again.");
       }
     } on DioException catch (e) {
-      final message =
-          e.response?.data?["message"]?.toString() ??
-          e.response?.data?["error"]?.toString() ??
-          "Google signup failed";
-
-      _showMessage(message);
+      _showMessage(
+        AppNotify.messageFromError(
+          e,
+          fallback: "We couldn't sign you up with Google. Please try again.",
+        ),
+      );
     } catch (e) {
-      _showMessage(e.toString());
+      _showMessage("We couldn't sign you up with Google. Please try again.");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

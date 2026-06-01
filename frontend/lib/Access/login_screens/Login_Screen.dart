@@ -7,6 +7,7 @@ import 'package:frontend/Access/verification/forgot_password.dart';
 import 'package:frontend/Home_pages/home_worker.dart';
 import 'package:frontend/Home_pages/smart_worker_map_page.dart';
 import 'package:frontend/core/network/dio_client.dart';
+import 'package:frontend/core/ui/app_notify.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/core/network/socket_client.dart';
 
@@ -32,18 +33,13 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFF1E40AF),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    if (isError) {
+      AppNotify.error(context, message);
+    } else {
+      AppNotify.success(context, message);
+    }
   }
 
   void _goToHomeByRole({
@@ -139,7 +135,7 @@ Future<void> _login() async {
       final userData = data["data"] as Map<String, dynamic>?;
       final currentRole = userData?["currentRole"] ?? userData?["role"];
 
-      _showMessage("Login successful");
+      _showMessage("You're signed in.", isError: false);
 
       _goToHomeByRole(
         currentRole: currentRole?.toString(),
@@ -147,21 +143,21 @@ Future<void> _login() async {
       );
     } else {
       final message =
+          data?["error"]?["message"]?.toString() ??
           data?["message"]?.toString() ??
-          data?["error"]?.toString() ??
-          "Login failed";
+          "We couldn't sign you in. Please try again.";
 
       _showMessage(message);
     }
   } on DioException catch (e) {
-    final message =
-        e.response?.data?["message"]?.toString() ??
-        e.response?.data?["error"]?.toString() ??
-        "Login failed";
-
-    _showMessage(message);
+    _showMessage(
+      AppNotify.messageFromError(
+        e,
+        fallback: "We couldn't sign you in. Please try again.",
+      ),
+    );
   } catch (e) {
-    _showMessage("Login failed: $e");
+    _showMessage("We couldn't sign you in. Please try again.");
   } finally {
     if (mounted) {
       setState(() => _isLoading = false);
@@ -186,31 +182,32 @@ Future<void> _login() async {
         final currentRole = userData?["currentRole"] ?? userData?["role"];
         final nextAction = responseData?["nextAction"];
 
-        _showMessage("Google login successful");
+        _showMessage("You're signed in with Google.", isError: false);
 
         _goToHomeByRole(
           currentRole: currentRole?.toString(),
           nextAction: nextAction?.toString(),
         );
       } else {
-        _showMessage("Google login failed");
+        _showMessage("We couldn't sign you in with Google. Please try again.");
       }
     } on DioException catch (e) {
       final code = e.response?.data?["error"]?["code"]?.toString();
 
       if (code == "LOCATION_REQUIRED") {
-        _showMessage("This Google account is not registered yet. Please sign up first.");
+        _showMessage(
+          "This Google account isn't registered yet. Please sign up first.",
+        );
       } else {
-        final message =
-            e.response?.data?["message"]?.toString() ??
-            e.response?.data?["error"]?["message"]?.toString() ??
-            e.response?.data?["error"]?.toString() ??
-            "Google login failed";
-
-        _showMessage(message);
+        _showMessage(
+          AppNotify.messageFromError(
+            e,
+            fallback: "We couldn't sign you in with Google. Please try again.",
+          ),
+        );
       }
     } catch (e) {
-      _showMessage(e.toString());
+      _showMessage("We couldn't sign you in with Google. Please try again.");
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
