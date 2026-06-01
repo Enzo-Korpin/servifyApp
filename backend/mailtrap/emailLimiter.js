@@ -6,7 +6,7 @@ const PER_RECIPIENT_DAILY_LIMIT = Number(
   process.env.EMAIL_PER_RECIPIENT_DAILY_LIMIT || 3,
 );
 const COOLDOWN_SECONDS = Number(
-  process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 120,
+  process.env.EMAIL_RESEND_COOLDOWN_SECONDS || 60,
 );
 
 // In-memory limits (OK for now). For production use Redis.

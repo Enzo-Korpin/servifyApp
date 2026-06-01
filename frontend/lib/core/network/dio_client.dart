@@ -11,9 +11,9 @@ class DioClient {
   static late String _cookieStorePath;
 // 10.10.10.2
   // static const String baseUrl = 'http://10.10.10.2:5000';
-  // static const String baseUrl = 'http://192.168.100.9:5000';
+  static const String baseUrl = 'http://192.168.100.9:5000';
 
-  static const String baseUrl = 'https://servifyapp.onrender.com';
+  // static const String baseUrl = 'https://servifyapp.onrender.com';
 
   static Future<void> init() async {
     dio = Dio(
