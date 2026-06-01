@@ -12,6 +12,42 @@ import {
   ConflictError,
   PayloadTooLargeError,
 } from "../errors/httpErrors.js";
+
+export const getWorkerFeedbacks = asyncHandler(async (req, res) => {
+  const { workerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(workerId)) {
+    throw new BadRequestError("Invalid worker id", "INVALID_WORKER_ID");
+  }
+
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+
+  const feedbacks = await Feedback.find({ workerId })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate("customerId", "fullName image")
+    .lean();
+
+  const data = feedbacks.map((f) => ({
+    _id: f._id,
+    rating: f.rate,
+    comment: f.comment,
+    createdAt: f.createdAt,
+    customer: f.customerId
+      ? {
+          _id: f.customerId._id,
+          fullName: f.customerId.fullName || "",
+          image: f.customerId.image || "",
+        }
+      : null,
+  }));
+
+  return res.status(200).json({
+    success: true,
+    data,
+    error: null,
+  });
+});
 import {
   invalidateAdminStats,
   invalidateWorkerPublic,

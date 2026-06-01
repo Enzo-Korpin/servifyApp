@@ -1,11 +1,16 @@
 import express from "express";
 
 import { protectRoute } from "../middleware/protecteRoute.js";
-import { submitFeedback } from "../service/feedbackService.js";
+import {
+  submitFeedback,
+  getWorkerFeedbacks,
+} from "../service/feedbackService.js";
 import { submitFeedbackValidation } from "../middleware/feedbackValidation.js";
 import { submitFeedbackLimiter } from "../lib/rateLimit.js";
 
 const router = express.Router();
+
+router.get("/worker/:workerId", protectRoute, getWorkerFeedbacks);
 
 router.post(
   "/:requestId",
